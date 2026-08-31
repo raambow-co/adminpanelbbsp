@@ -7,16 +7,14 @@ import {
   Download, 
   Phone, 
   Mail, 
-  MapPin,
-  Send,
-  CheckCircle2,
-  Trash2,
-  Award,
-  Users,
-  CreditCard,
-  Building2,
-  FileSpreadsheet,
-  X
+  MapPin, 
+  Send, 
+  CheckCircle2, 
+  Trash2, 
+  Users, 
+  CreditCard, 
+  Building2, 
+  X 
 } from 'lucide-react';
 
 export interface ManualMember {

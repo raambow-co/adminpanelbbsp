@@ -1,5 +1,6 @@
-﻿{
+{
   "hosting": {
+    "site": "bbsp-admin",
     "public": "dist",
     "ignore": [
       "firebase.json",

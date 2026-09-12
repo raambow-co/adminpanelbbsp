@@ -32,7 +32,7 @@ export function Settings() {
       <PageHeader 
         title="Admin Portal Settings"
         description="Configure membership fee policies, automated email receipts, and secretariat security settings."
-        badge="Sudheer Reddy Anna Admin"
+        badge="Sudheer Reddy Admin"
         action={
           <button 
             onClick={handleSave}
@@ -76,7 +76,7 @@ export function Settings() {
               <label className="block text-xs font-bold text-[#10367D] mb-1">Administrator Name</label>
               <input 
                 type="text" 
-                defaultValue="Sudheer Reddy Anna"
+                defaultValue="Sudheer Reddy"
                 className="w-full px-3.5 py-2 rounded-xl bg-[#FAF9F6] border border-[#10367D]/15 text-xs text-[#10367D] font-bold focus:outline-none focus:border-[#10367D]"
               />
             </div>

@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { AdminLayout } from './layouts/AdminLayout';
 import { Dashboard } from './pages/Dashboard';
 import { Applications } from './pages/Applications';
+import { CustomerEnquiries } from './pages/CustomerEnquiries';
 import { Members } from './pages/Members';
 import { ManualMembers } from './pages/ManualMembers';
 import { AccountsBook } from './pages/AccountsBook';
@@ -30,6 +31,7 @@ function AppContent() {
                 <Route path="/" element={<AdminLayout />}>
                   <Route index element={<Dashboard />} />
                   <Route path="applications" element={<Applications />} />
+                  <Route path="enquiries" element={<CustomerEnquiries />} />
                   <Route path="members" element={<Members />} />
                   <Route path="manual-members" element={<ManualMembers />} />
                   <Route path="accounts" element={<AccountsBook />} />

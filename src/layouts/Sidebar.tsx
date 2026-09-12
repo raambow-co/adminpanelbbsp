@@ -9,7 +9,8 @@ import {
   Settings,
   LogOut,
   X,
-  ShieldCheck
+  ShieldCheck,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -18,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 const navigation = [
   { name: 'Executive Overview', href: '/', icon: LayoutDashboard },
   { name: 'Applications & Proposals', href: '/applications', icon: FileText, section: 'PROPOSALS & DEALS' },
+  { name: 'Customer Inquiries Feed', href: '/enquiries', icon: MessageSquare },
   { name: 'All Website Members', href: '/members', icon: Users, section: 'MEMBERS NETWORK' },
   { name: 'Manual Onboarding', href: '/manual-members', icon: UserPlus },
   { name: 'Accounts Book', href: '/accounts', icon: BookOpenCheck, section: 'FINANCIALS & LEDGER' },
@@ -49,7 +51,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
               BUILD BHARAT
             </h1>
             <p className="text-[10px] font-bold tracking-wider text-[#1A4594]/85 uppercase leading-tight mt-0.5">
-              Members Admin
+              SuperAdmin Portal
             </p>
           </div>
         </div>
@@ -98,7 +100,7 @@ export function Sidebar({ isOpen, setIsOpen }: SidebarProps) {
         })}
       </nav>
 
-      {/* Admin Profile Footer - Sudheer Reddy Anna */}
+      {/* Admin Profile Footer - Sudheer Reddy */}
       <div className="p-3 border-t border-[#10367D]/12 bg-[#FAF9F6]/60">
         <div className="flex items-center justify-between p-2.5 rounded-2xl bg-white border border-[#10367D]/10 shadow-sm">
           <div className="flex items-center gap-2.5 min-w-0">

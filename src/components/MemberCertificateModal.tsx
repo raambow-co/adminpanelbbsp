@@ -114,7 +114,7 @@ Congratulations! Your official registration has been confirmed.
 💳 *Registration Fee:* ${feeAmount} (Paid & Verified)
 📅 *Issue Date:* ${dateStr}
 
-🏛️ *Authorized By:* Sudheer Reddy Anna
+🏛️ *Authorized By:* Sudheer Reddy
 Managing Director & SuperAdmin, Build Bharat Synergy Partners
 
 _(Your Official Quotation Certificate Image is attached below)_`;
@@ -303,7 +303,7 @@ _(Your Official Quotation Certificate Image is attached below)_`;
               <div className="text-right space-y-0.5">
                 <div className="inline-block border-b-2 border-[#10367D] pb-1 mb-1">
                   <p className="font-sora font-extrabold text-base text-[#10367D] tracking-tight">
-                    Sudheer Reddy Anna
+                    Sudheer Reddy
                   </p>
                 </div>
                 <p className="text-[10px] font-bold text-[#1A4594] uppercase tracking-wider">

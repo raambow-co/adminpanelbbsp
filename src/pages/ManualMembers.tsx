@@ -29,41 +29,7 @@ export interface ManualMember {
   notes: string;
 }
 
-const mockManualMembers: ManualMember[] = [
-  {
-    id: 'BBSP-007',
-    name: 'K. Madhusudhan',
-    tier: 'Executive Member',
-    phone: '+91 94405 12345',
-    email: 'madhusudhan.k@gmail.com',
-    hubLocation: 'Vijayawada Office',
-    onboardingDate: '28 Aug 2026',
-    feePaid: '₹5,000 (Cash)',
-    notes: 'Direct office entry and physical receipt issued.'
-  },
-  {
-    id: 'BBSP-008',
-    name: 'B. Jagadeesh Reddy',
-    tier: 'Premium Member',
-    phone: '+91 98481 98765',
-    email: 'jagadeesh.reddy@gmail.com',
-    hubLocation: 'Hyderabad Office',
-    onboardingDate: '27 Aug 2026',
-    feePaid: '₹5,000 (Bank Transfer)',
-    notes: 'Direct onboarding authorized by Sudheer Reddy Anna.'
-  },
-  {
-    id: 'BBSP-009',
-    name: 'S. Ratna Kumari',
-    tier: 'Gold Member',
-    phone: '+91 97014 45678',
-    email: 'ratna.kumari@gmail.com',
-    hubLocation: 'Tirupati Office',
-    onboardingDate: '26 Aug 2026',
-    feePaid: '₹5,000 (Cheque)',
-    notes: 'Physical membership form submitted and verified.'
-  }
-];
+const mockManualMembers: ManualMember[] = [];
 
 export function ManualMembers() {
   const [manualList, setManualList] = useState<ManualMember[]>(() => {

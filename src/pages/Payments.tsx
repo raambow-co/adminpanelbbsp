@@ -21,52 +21,7 @@ interface TransactionItem {
   mode: 'Razorpay UPI' | 'Debit/Credit Card' | 'Direct Escrow NEFT';
 }
 
-const mockTransactions: TransactionItem[] = [
-  {
-    id: 'TXN-BBSP-001',
-    memberId: 'BBSP-001',
-    memberName: 'Aditya Nandyala',
-    phone: '+91 75699 28327',
-    type: 'New Member Registration Fee',
-    amount: '₹5,000',
-    date: 'Today, 14:15',
-    status: 'Completed',
-    mode: 'Razorpay UPI'
-  },
-  {
-    id: 'TXN-BBSP-002',
-    memberId: 'BBSP-002',
-    memberName: 'Rajesh Nandyala',
-    phone: '+91 94933 03499',
-    type: 'Premium Member Registration Fee',
-    amount: '₹5,000',
-    date: 'Today, 11:30',
-    status: 'Completed',
-    mode: 'Debit/Credit Card'
-  },
-  {
-    id: 'TXN-BBSP-003',
-    memberId: 'BBSP-003',
-    memberName: 'Yuvan Datti',
-    phone: '+91 76748 77337',
-    type: 'Gold Member Registration Fee',
-    amount: '₹5,000',
-    date: 'Yesterday',
-    status: 'Completed',
-    mode: 'Razorpay UPI'
-  },
-  {
-    id: 'TXN-BBSP-004',
-    memberId: 'BBSP-004',
-    memberName: 'Alisha',
-    phone: '+91 81257 37275',
-    type: 'Executive Member Registration Fee',
-    amount: '₹5,000',
-    date: '27 Aug 2026',
-    status: 'Completed',
-    mode: 'Debit/Credit Card'
-  }
-];
+const mockTransactions: TransactionItem[] = [];
 
 export function Payments() {
   const [searchTerm, setSearchTerm] = useState('');

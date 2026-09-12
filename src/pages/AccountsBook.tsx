@@ -210,7 +210,7 @@ const initialEntries: CommissionEntry[] = [
     clearedDate: '29 Aug 2026, 11:00 AM',
     payoutMethod: 'UPI (GPay / 7569928327@upi)',
     payoutRef: 'UPI-REF-994821034',
-    notes: 'Cleared by SuperAdmin Sudheer Reddy Anna.'
+    notes: 'Cleared by SuperAdmin Sudheer Reddy.'
   },
   {
     id: 'COMM-104',
@@ -299,7 +299,7 @@ export function AccountsBook() {
     amount: '',
     payoutMethod: 'UPI (GPay / PhonePe / Paytm)',
     payoutRef: '',
-    notes: 'Paid and settled in full by Sudheer Reddy Anna'
+    notes: 'Paid and settled in full by Sudheer Reddy'
   });
 
   const triggerToast = (msg: string) => {
@@ -468,7 +468,7 @@ export function AccountsBook() {
       amount: member.walletBalance.toString(),
       payoutMethod: 'UPI (GPay / PhonePe / Paytm)',
       payoutRef: `UPI-REF-${Math.floor(100000000 + Math.random() * 900000000)}`,
-      notes: `Full balance clearance of ₹${member.walletBalance.toLocaleString('en-IN')} paid by Sudheer Reddy Anna`
+      notes: `Full balance clearance of ₹${member.walletBalance.toLocaleString('en-IN')} paid by Sudheer Reddy`
     });
     setShowClearModal(true);
   };
@@ -1404,7 +1404,7 @@ export function AccountsBook() {
             <div className="pt-3 border-t border-[#10367D]/10 flex flex-col sm:flex-row items-center justify-between text-xs text-[#1A4594]/80 gap-3">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span className="font-semibold">Build Bharat Official Accounts Book • Managed by Sudheer Reddy Anna</span>
+                <span className="font-semibold">Build Bharat Official Accounts Book • Managed by Sudheer Reddy</span>
               </div>
 
               {activeMember.walletBalance > 0 && (
@@ -1499,7 +1499,7 @@ export function AccountsBook() {
             <div className="pt-3 border-t border-[#10367D]/10 flex items-center justify-between text-xs">
               <div>
                 <p className="text-[10px] text-[#1A4594]/70 font-semibold">Authorized By:</p>
-                <p className="font-sora font-extrabold text-xs text-[#10367D]">Sudheer Reddy Anna</p>
+                <p className="font-sora font-extrabold text-xs text-[#10367D]">Sudheer Reddy</p>
                 <p className="text-[9px] text-[#1A4594]/60">Managing Director & SuperAdmin</p>
               </div>
 

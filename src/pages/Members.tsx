@@ -28,74 +28,7 @@ export interface MemberItem {
   isVerified: boolean;
 }
 
-const initialMockMembers: MemberItem[] = [
-  {
-    id: 'BBSP-001',
-    name: 'Aditya Nandyala',
-    tier: 'Standard Member',
-    phone: '+91 75699 28327',
-    email: 'aditya.nandyala@gmail.com',
-    state: 'Hyderabad',
-    joinDate: 'Today',
-    feePaid: '₹5,000',
-    isVerified: true
-  },
-  {
-    id: 'BBSP-002',
-    name: 'Rajesh Nandyala',
-    tier: 'Premium Member',
-    phone: '+91 94933 03499',
-    email: 'rajesh.nandyala@gmail.com',
-    state: 'Nandyal',
-    joinDate: 'Today',
-    feePaid: '₹5,000',
-    isVerified: true
-  },
-  {
-    id: 'BBSP-003',
-    name: 'Yuvan Datti',
-    tier: 'Gold Member',
-    phone: '+91 76748 77337',
-    email: 'yuvan.datti@gmail.com',
-    state: 'Visakhapatnam',
-    joinDate: 'Yesterday',
-    feePaid: '₹5,000',
-    isVerified: true
-  },
-  {
-    id: 'BBSP-004',
-    name: 'Alisha',
-    tier: 'Executive Member',
-    phone: '+91 81257 37275',
-    email: 'alisha.k@gmail.com',
-    state: 'Bengaluru',
-    joinDate: '27 Aug 2026',
-    feePaid: '₹5,000',
-    isVerified: true
-  },
-  {
-    id: 'BBSP-005',
-    name: 'Suresh Kumar',
-    tier: 'Standard Member',
-    phone: '+91 98490 11223',
-    email: 'suresh.k@gmail.com',
-    state: 'Vijayawada',
-    joinDate: '26 Aug 2026',
-    feePaid: '₹5,000',
-    isVerified: true
-  },
-  {
-    id: 'BBSP-006',
-    name: 'Priya Reddy',
-    tier: 'Premium Member',
-    phone: '+91 94401 88990',
-    email: 'priya.r@gmail.com',
-    state: 'Hyderabad',
-    joinDate: '25 Aug 2026',
-    feePaid: '₹5,000',
-    isVerified: true
-  }
-];
+const initialMockMembers: MemberItem[] = [];
 
 export function Members() {
   const [members, setMembers] = useState<MemberItem[]>(() => {

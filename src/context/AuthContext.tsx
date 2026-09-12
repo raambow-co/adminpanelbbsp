@@ -18,7 +18,7 @@ interface AuthContextType {
 }
 
 const defaultUser: UserProfile = {
-  name: 'Sudheer Reddy Anna',
+  name: 'Sudheer Reddy',
   title: 'Managing Director & SuperAdmin',
   role: 'Chief Administrator',
   email: 'sudheer.reddy@bbsp.in',

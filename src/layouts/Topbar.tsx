@@ -72,7 +72,7 @@ export function Topbar({ setSidebarOpen }: TopbarProps) {
 
         <div className="h-6 w-[1px] bg-[#10367D]/12 hidden sm:block" />
 
-        {/* Admin User Chip - Sudheer Reddy Anna */}
+        {/* Admin User Chip - Sudheer Reddy */}
         <div className="flex items-center gap-2.5 pl-1 cursor-pointer group">
           <div className="w-8 h-8 rounded-full bg-[#10367D] text-[#A5CEE0] font-sora font-extrabold text-xs flex items-center justify-center border-2 border-[#A5CEE0]/50 group-hover:border-[#10367D] transition-colors shadow-sm">
             SR

@@ -381,12 +381,19 @@ export function AccountsBook() {
   // Filtered Ledger Entries
   const filteredEntries = useMemo(() => {
     return entries.filter(entry => {
+      const s = (searchTerm || '').trim().toLowerCase();
+      const memberName = (entry.memberName || '').toLowerCase();
+      const memberId = (entry.memberId || '').toLowerCase();
+      const voucherNo = (entry.voucherNo || '').toLowerCase();
+      const projectTitle = (entry.projectTitle || '').toLowerCase();
+      const workCategory = (entry.workCategory || '').toLowerCase();
+
       const matchesSearch = 
-        entry.memberName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.memberId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.voucherNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.projectTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        entry.workCategory.toLowerCase().includes(searchTerm.toLowerCase());
+        memberName.includes(s) ||
+        memberId.includes(s) ||
+        voucherNo.includes(s) ||
+        projectTitle.includes(s) ||
+        workCategory.includes(s);
 
       const matchesCat = selectedCategory === 'All' || entry.workCategory === selectedCategory;
       const matchesStatus = selectedStatus === 'All' || 

@@ -26,12 +26,20 @@ const mockTransactions: TransactionItem[] = [];
 export function Payments() {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredTxns = mockTransactions.filter(t => 
-    t.memberName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    t.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.memberId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    t.phone.includes(searchTerm)
-  );
+  const filteredTxns = mockTransactions.filter(t => {
+    const s = (searchTerm || '').trim().toLowerCase();
+    const memberName = (t.memberName || '').toLowerCase();
+    const id = (t.id || '').toLowerCase();
+    const memberId = (t.memberId || '').toLowerCase();
+    const phone = (t.phone || '');
+
+    return (
+      memberName.includes(s) || 
+      id.includes(s) ||
+      memberId.includes(s) ||
+      phone.includes(searchTerm)
+    );
+  });
 
   return (
     <div className="space-y-6">

@@ -10,6 +10,7 @@ import { Members } from './pages/Members';
 import { ManualMembers } from './pages/ManualMembers';
 import { AccountsBook } from './pages/AccountsBook';
 import { Settings } from './pages/Settings';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { AnimatePresence } from 'framer-motion';
 
 function AppContent() {
@@ -27,18 +28,20 @@ function AppContent() {
             <Login />
           ) : (
             <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<AdminLayout />}>
-                  <Route index element={<Dashboard />} />
-                  <Route path="applications" element={<Applications />} />
-                  <Route path="enquiries" element={<CustomerEnquiries />} />
-                  <Route path="members" element={<Members />} />
-                  <Route path="manual-members" element={<ManualMembers />} />
-                  <Route path="accounts" element={<AccountsBook />} />
-                  <Route path="settings" element={<Settings />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Route>
-              </Routes>
+              <ErrorBoundary fallbackTitle="Admin Portal Error">
+                <Routes>
+                  <Route path="/" element={<AdminLayout />}>
+                    <Route index element={<Dashboard />} />
+                    <Route path="applications" element={<Applications />} />
+                    <Route path="enquiries" element={<CustomerEnquiries />} />
+                    <Route path="members" element={<Members />} />
+                    <Route path="manual-members" element={<ManualMembers />} />
+                    <Route path="accounts" element={<AccountsBook />} />
+                    <Route path="settings" element={<Settings />} />
+                    <Route path="*" element={<Navigate to="/" replace />} />
+                  </Route>
+                </Routes>
+              </ErrorBoundary>
             </BrowserRouter>
           )}
         </>

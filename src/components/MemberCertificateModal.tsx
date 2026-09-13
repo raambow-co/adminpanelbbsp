@@ -42,11 +42,12 @@ export function MemberCertificateModal({ member, onClose, onSentToast }: MemberC
 
   if (!member) return null;
 
-  const rawPhone = member.phone.replace(/\D/g, '');
+  const rawPhone = (member.phone || '').replace(/\D/g, '');
   const formattedPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone.startsWith('91') ? rawPhone : `91${rawPhone}`;
   const feeAmount = member.amountPaid || '₹5,000';
   const dateStr = member.date || '29 August 2026';
-  const fileName = `${member.name.replace(/\s+/g, '_')}_BBSP_Quotation.png`;
+  const memberName = member.name || 'Member';
+  const fileName = `${memberName.replace(/\s+/g, '_')}_BBSP_Quotation.png`;
 
   // Pre-render certificate into high-res Blob
   const preRenderImage = useCallback(async () => {

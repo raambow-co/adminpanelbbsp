@@ -11,7 +11,7 @@ interface UserProfile {
 interface AuthContextType {
   isAuthenticated: boolean;
   user: UserProfile;
-  login: (email?: string, password?: string) => void;
+  login: (email?: string, password?: string) => boolean;
   logout: () => void;
   showSplash: boolean;
   finishSplash: () => void;
@@ -40,9 +40,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const [user] = useState<UserProfile>(defaultUser);
 
-  const login = (_email?: string, _password?: string) => {
-    setIsAuthenticated(true);
-    localStorage.setItem('bbsp_admin_auth', 'true');
+  const login = (email?: string, password?: string): boolean => {
+    if (!email || !password) return false;
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    const isValidUser =
+      cleanEmail === 'sudheer.reddy@bbsp.in' ||
+      cleanEmail === 'admin@bbsp.in' ||
+      cleanEmail === 'sudheer' ||
+      cleanEmail === 'admin';
+
+    const isValidPassword =
+      cleanPass === 'admin' ||
+      cleanPass === 'bbsp@2026' ||
+      cleanPass === 'admin123';
+
+    if (isValidUser && isValidPassword) {
+      setIsAuthenticated(true);
+      localStorage.setItem('bbsp_admin_auth', 'true');
+      return true;
+    }
+    return false;
   };
 
   const logout = () => {

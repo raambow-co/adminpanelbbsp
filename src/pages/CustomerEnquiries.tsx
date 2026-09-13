@@ -1,4 +1,4 @@
-import { db, collection, doc, updateDoc, onSnapshot, query, orderBy } from '../lib/firebase';
+import { db, collection, doc, updateDoc, onSnapshot } from '../lib/firebase';
 import { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -29,12 +29,33 @@ export function CustomerEnquiries() {
 
   useEffect(() => {
     try {
-      const q = query(collection(db, 'submissions'), orderBy('submittedAt', 'desc'));
+      const q = collection(db, 'submissions');
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const liveList = snapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data()
-        })) as UnifiedSubmission[];
+        const liveList = snapshot.docs.map(d => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            formType: data.formType || 'general-contact',
+            formName: data.formName || 'Customer Enquiry',
+            sourceFile: data.sourceFile || '',
+            applicantName: data.applicantName || data.name || data.fullName || 'Anonymous Applicant',
+            phone: data.phone || data.mobileNumber || data.mobile || '',
+            email: data.email || '',
+            city: data.city || data.location || data.district || '',
+            state: data.state || '',
+            timestamp: data.timestamp || data.submittedAt || data.createdAt || 'Recent',
+            status: data.status || 'Pending',
+            ...data
+          };
+        }) as UnifiedSubmission[];
+
+        // Client-side sort: newest first
+        liveList.sort((a: any, b: any) => {
+          const tA = new Date(a.submittedAt || a.timestamp || a.createdAt || 0).getTime();
+          const tB = new Date(b.submittedAt || b.timestamp || b.createdAt || 0).getTime();
+          return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+        });
+
         if (liveList.length > 0) {
           setEnquiries(liveList);
         }
@@ -68,26 +89,36 @@ export function CustomerEnquiries() {
 
   const openCertificate = (enq: UnifiedSubmission) => {
     setCertificateMember({
-      id: enq.id,
-      name: enq.applicantName,
-      phone: enq.phone,
-      email: enq.email,
+      id: enq.id || '',
+      name: enq.applicantName || 'Applicant',
+      phone: enq.phone || '',
+      email: enq.email || '',
       amountPaid: enq.amountPaid || enq.processingFee || enq.requiredAmount || 'Verified',
-      state: enq.city + (enq.state ? `, ${enq.state}` : ''),
+      state: (enq.city || '') + (enq.state ? `, ${enq.state}` : ''),
       date: 'Today'
     });
   };
 
   const filtered = enquiries.filter(e => {
+    const s = (searchTerm || '').trim().toLowerCase();
+    const applicantName = (e.applicantName || '').toLowerCase();
+    const phone = (e.phone || '');
+    const id = (e.id || '').toLowerCase();
+    const email = (e.email || '').toLowerCase();
+    const city = (e.city || '').toLowerCase();
+    const businessName = (e.businessName || '').toLowerCase();
+    const mapEnquiryMessage = (e.mapEnquiryMessage || '').toLowerCase();
+    const mapServiceInterest = (e.mapServiceInterest || '').toLowerCase();
+
     const matchesSearch = 
-      e.applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.phone.includes(searchTerm) ||
-      e.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (e.businessName && e.businessName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (e.mapEnquiryMessage && e.mapEnquiryMessage.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (e.mapServiceInterest && e.mapServiceInterest.toLowerCase().includes(searchTerm.toLowerCase()));
+      applicantName.includes(s) ||
+      phone.includes(searchTerm) ||
+      id.includes(s) ||
+      email.includes(s) ||
+      city.includes(s) ||
+      businessName.includes(s) ||
+      mapEnquiryMessage.includes(s) ||
+      mapServiceInterest.includes(s);
 
     const matchesType = selectedFormType === 'all' || e.formType === selectedFormType;
 
@@ -178,16 +209,26 @@ export function CustomerEnquiries() {
           </div>
         ) : (
           filtered.map((enq) => {
-            const config = FORM_TYPE_CONFIG[enq.formType];
+            const config = FORM_TYPE_CONFIG[enq.formType] || {
+              label: enq.formType || 'Customer Enquiry',
+              shortCode: 'ENQ',
+              sourceFile: '',
+              badgeColor: 'bg-stone-50 text-stone-700 border-stone-200',
+              description: 'Customer Inbound Lead'
+            };
+
+            const safePhone = (enq.phone || '').replace(/[^0-9]/g, '');
+            const safeApplicant = enq.applicantName || 'Applicant';
+            const safeId = enq.id || '';
 
             return (
               <div key={enq.id} className="bbsp-card p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:shadow-md transition-shadow">
                 <div className="space-y-2 min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-xs font-extrabold text-[#10367D] bg-[#FAF9F6] px-2.5 py-0.5 rounded border border-[#10367D]/15 shadow-sm">
-                      {enq.id}
+                      {safeId}
                     </span>
-                    <h4 className="font-sora font-extrabold text-base text-[#10367D]">{enq.applicantName}</h4>
+                    <h4 className="font-sora font-extrabold text-base text-[#10367D]">{safeApplicant}</h4>
                     <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${config.badgeColor}`}>
                       {config.label}
                     </span>
@@ -224,24 +265,26 @@ export function CustomerEnquiries() {
                   )}
 
                   <div className="flex items-center gap-4 text-xs text-[#1A4594]/80 flex-wrap">
-                    <a href={`tel:${enq.phone}`} className="font-bold text-[#10367D] flex items-center gap-1 hover:underline">
-                      <Phone className="w-3.5 h-3.5 text-[#1A4594]" /> {enq.phone}
+                    <a href={`tel:${enq.phone || ''}`} className="font-bold text-[#10367D] flex items-center gap-1 hover:underline">
+                      <Phone className="w-3.5 h-3.5 text-[#1A4594]" /> {enq.phone || 'N/A'}
                     </a>
-                    <a href={`mailto:${enq.email}`} className="font-bold text-[#10367D] flex items-center gap-1 hover:underline">
-                      <Mail className="w-3.5 h-3.5 text-[#1A4594]" /> {enq.email}
-                    </a>
+                    {enq.email && (
+                      <a href={`mailto:${enq.email}`} className="font-bold text-[#10367D] flex items-center gap-1 hover:underline">
+                        <Mail className="w-3.5 h-3.5 text-[#1A4594]" /> {enq.email}
+                      </a>
+                    )}
                     <span className="text-stone-700 font-medium flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-stone-400" /> {enq.city}{enq.state ? `, ${enq.state}` : ''}
+                      <MapPin className="w-3 h-3 text-stone-400" /> {enq.city || 'N/A'}{enq.state ? `, ${enq.state}` : ''}
                     </span>
                     <span className="text-[#1A4594]/60 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {enq.timestamp}
+                      <Clock className="w-3 h-3" /> {enq.timestamp || 'Recent'}
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#10367D]/10">
                   <a
-                    href={`https://wa.me/${enq.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${enq.applicantName}, Build Bharat Team is responding to your enquiry #${enq.id}. How can we assist you today?`)}`}
+                    href={`https://wa.me/${safePhone}?text=${encodeURIComponent(`Hello ${safeApplicant}, Build Bharat Team is responding to your enquiry #${safeId}. How can we assist you today?`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition-colors flex items-center gap-1 shadow-sm text-decoration-none"
@@ -262,7 +305,7 @@ export function CustomerEnquiries() {
                   )}
 
                   <a
-                    href={`tel:${enq.phone}`}
+                    href={`tel:${enq.phone || ''}`}
                     className="px-3 py-1.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] border border-[#10367D]/15 text-xs font-bold flex items-center gap-1 cursor-pointer text-decoration-none"
                   >
                     <Phone className="w-3.5 h-3.5 text-[#10367D]" /> Call

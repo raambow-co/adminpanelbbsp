@@ -167,14 +167,20 @@ export function Members() {
     link.click();
     document.body.removeChild(link);
     showToast('Members Directory exported to CSV!');
-  };
+  };  const filteredMembers = members.filter(m => {
+    const s = (searchTerm || '').trim().toLowerCase();
+    const name = (m.name || '').toLowerCase();
+    const id = (m.id || '').toLowerCase();
+    const phone = (m.phone || '');
+    const email = (m.email || '').toLowerCase();
+    const state = (m.state || '').toLowerCase();
 
-  const filteredMembers = members.filter(m => {
-    const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          m.phone.includes(searchTerm) ||
-                          m.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          m.state.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = 
+      name.includes(s) || 
+      id.includes(s) ||
+      phone.includes(searchTerm) ||
+      email.includes(s) ||
+      state.includes(s);
     const matchesTier = selectedTier === 'All' || m.tier === selectedTier;
     return matchesSearch && matchesTier;
   });
@@ -228,7 +234,7 @@ export function Members() {
           <div className="flex items-center gap-2.5 px-3.5 py-2 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-[#10367D] w-full md:w-80">
             <Search className="w-4 h-4 text-[#1A4594]/70" />
             <input 
-              type="text"
+              type="text" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by ID (BBSP-001), name, phone, city..."
@@ -257,85 +263,95 @@ export function Members() {
 
       {/* Members Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filteredMembers.map((m) => (
-          <div key={m.id} className="bbsp-card p-5 relative overflow-hidden flex flex-col justify-between group hover:border-[#10367D]/30 transition-all">
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#10367D]" />
+        {filteredMembers.map((m) => {
+          const initials = (m.name || 'Member')
+            .split(' ')
+            .filter(Boolean)
+            .map(n => n[0])
+            .slice(0, 2)
+            .join('')
+            .toUpperCase() || 'M';
 
-            <div>
-              <div className="flex items-start justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[#10367D] text-white font-extrabold text-base flex items-center justify-center shadow-md shadow-[#10367D]/20 flex-shrink-0">
-                    {m.name.split(' ').map(n => n[0]).slice(0, 2).join('')}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-mono text-[11px] font-extrabold text-[#10367D] bg-[#FAF9F6] px-1.5 py-0.5 rounded border border-[#10367D]/15">
-                        {m.id}
-                      </span>
-                      <h3 className="font-sora font-extrabold text-base text-[#10367D] truncate">{m.name}</h3>
-                      {m.isVerified && <CheckCircle className="w-4 h-4 text-emerald-600 fill-emerald-100 flex-shrink-0" />}
-                    </div>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#10367D]/10 text-[#10367D] inline-block mt-0.5">
-                      {m.tier}
-                    </span>
-                  </div>
-                </div>
+          return (
+            <div key={m.id} className="bbsp-card p-5 relative overflow-hidden flex flex-col justify-between group hover:border-[#10367D]/30 transition-all">
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#10367D]" />
 
-                <button 
-                  onClick={() => handleDeleteMember(m.id, m.name)}
-                  title="Delete member"
-                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div className="space-y-2 text-xs py-3 border-y border-[#10367D]/10">
-                <div className="flex items-center justify-between">
-                  <span className="text-[#1A4594]/70 font-semibold flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5" /> Phone:
-                  </span>
-                  <a href={`tel:${m.phone}`} className="font-bold text-[#10367D] hover:underline">{m.phone}</a>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[#1A4594]/70 font-semibold flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5" /> Email:
-                  </span>
-                  <a href={`mailto:${m.email}`} className="font-bold text-[#10367D] hover:underline truncate max-w-[170px]">{m.email}</a>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[#1A4594]/70 font-semibold flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5" /> City:
-                  </span>
-                  <span className="font-bold text-[#10367D]">{m.state}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[#1A4594]/70 font-semibold flex items-center gap-1.5">
-                    <Award className="w-3.5 h-3.5" /> Joined:
-                  </span>
-                  <span className="font-bold text-[#10367D]">{m.joinDate}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-2 flex items-center justify-between gap-2">
               <div>
-                <p className="text-[10px] font-bold text-[#1A4594]/60 uppercase">Fee Paid</p>
-                <p className="font-sora font-extrabold text-sm text-emerald-700">{m.feePaid}</p>
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-[#10367D] text-white font-extrabold text-base flex items-center justify-center shadow-md shadow-[#10367D]/20 flex-shrink-0">
+                      {initials}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono text-[11px] font-extrabold text-[#10367D] bg-[#FAF9F6] px-1.5 py-0.5 rounded border border-[#10367D]/15">
+                          {m.id}
+                        </span>
+                        <h3 className="font-sora font-extrabold text-base text-[#10367D] truncate">{m.name || 'Anonymous'}</h3>
+                        {m.isVerified && <CheckCircle className="w-4 h-4 text-emerald-600 fill-emerald-100 flex-shrink-0" />}
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#10367D]/10 text-[#10367D] inline-block mt-0.5">
+                        {m.tier}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => handleDeleteMember(m.id, m.name)}
+                    title="Delete member"
+                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 text-xs py-3 border-y border-[#10367D]/10">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#1A4594]/70 font-semibold flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5" /> Phone:
+                    </span>
+                    <a href={`tel:${m.phone}`} className="font-bold text-[#10367D] hover:underline">{m.phone}</a>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#1A4594]/70 font-semibold flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5" /> Email:
+                    </span>
+                    <a href={`mailto:${m.email}`} className="font-bold text-[#10367D] hover:underline truncate max-w-[170px]">{m.email}</a>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#1A4594]/70 font-semibold flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5" /> City:
+                    </span>
+                    <span className="font-bold text-[#10367D]">{m.state}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[#1A4594]/70 font-semibold flex items-center gap-1.5">
+                      <Award className="w-3.5 h-3.5" /> Joined:
+                    </span>
+                    <span className="font-bold text-[#10367D]">{m.joinDate}</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <button 
-                  onClick={() => openCertificate(m)}
-                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 hover:scale-105 active:scale-95"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>WhatsApp Quotation</span>
-                </button>
+              <div className="mt-4 pt-2 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-bold text-[#1A4594]/60 uppercase">Fee Paid</p>
+                  <p className="font-sora font-extrabold text-sm text-emerald-700">{m.feePaid}</p>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    onClick={() => openCertificate(m)}
+                    className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 hover:scale-105 active:scale-95"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>WhatsApp Quotation</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Add Member Modal */}

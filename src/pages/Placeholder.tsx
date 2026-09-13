@@ -10,7 +10,7 @@ export function Placeholder() {
     <div>
       <PageHeader 
         title={title} 
-        description={`Manage your ${title.toLowerCase()} and configurations.`} 
+        description={`Manage your ${(title || '').toLowerCase()} and configurations.`} 
       />
       
       <div className="bg-surface border border-border rounded-xl p-8 flex flex-col items-center justify-center min-h-[400px] text-center">

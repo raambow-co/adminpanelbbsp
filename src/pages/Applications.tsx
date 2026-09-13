@@ -1,4 +1,4 @@
-import { db, collection, doc, updateDoc, onSnapshot, query, orderBy } from '../lib/firebase';
+import { db, collection, doc, updateDoc, onSnapshot } from '../lib/firebase';
 import { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -33,12 +33,33 @@ export function Applications() {
 
   useEffect(() => {
     try {
-      const q = query(collection(db, 'submissions'), orderBy('submittedAt', 'desc'));
+      const q = collection(db, 'submissions');
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const liveList = snapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data()
-        })) as UnifiedSubmission[];
+        const liveList = snapshot.docs.map(d => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            formType: data.formType || 'partner-registration',
+            formName: data.formName || 'Application',
+            sourceFile: data.sourceFile || '',
+            applicantName: data.applicantName || data.name || data.fullName || 'Anonymous Applicant',
+            phone: data.phone || data.mobileNumber || data.mobile || '',
+            email: data.email || '',
+            city: data.city || data.location || data.district || '',
+            state: data.state || '',
+            timestamp: data.timestamp || data.submittedAt || data.createdAt || 'Recent',
+            status: data.status || 'Pending',
+            ...data
+          };
+        }) as UnifiedSubmission[];
+
+        // Client-side sort: newest first
+        liveList.sort((a: any, b: any) => {
+          const tA = new Date(a.submittedAt || a.timestamp || a.createdAt || 0).getTime();
+          const tB = new Date(b.submittedAt || b.timestamp || b.createdAt || 0).getTime();
+          return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+        });
+
         if (liveList.length > 0) {
           setSubmissions(liveList);
         }
@@ -77,26 +98,35 @@ export function Applications() {
 
   const openCertificate = (app: UnifiedSubmission) => {
     setCertificateMember({
-      id: app.id,
-      name: app.applicantName,
-      phone: app.phone,
-      email: app.email,
+      id: app.id || '',
+      name: app.applicantName || 'Applicant',
+      phone: app.phone || '',
+      email: app.email || '',
       amountPaid: app.amountPaid || app.processingFee || app.requiredAmount || 'Verified',
-      state: app.city + (app.state ? `, ${app.state}` : ''),
+      state: (app.city || '') + (app.state ? `, ${app.state}` : ''),
       date: 'Today, 29 Aug 2026'
     });
   };
 
   // Filter Logic
   const filteredSubmissions = submissions.filter(app => {
+    const s = (searchTerm || '').trim().toLowerCase();
+    const applicantName = (app.applicantName || '').toLowerCase();
+    const id = (app.id || '').toLowerCase();
+    const phone = (app.phone || '');
+    const email = (app.email || '').toLowerCase();
+    const city = (app.city || '').toLowerCase();
+    const businessName = (app.businessName || '').toLowerCase();
+    const mapEnquiryMessage = (app.mapEnquiryMessage || '').toLowerCase();
+
     const matchesSearch = 
-      app.applicantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.phone.includes(searchTerm) ||
-      app.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      app.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (app.businessName && app.businessName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (app.mapEnquiryMessage && app.mapEnquiryMessage.toLowerCase().includes(searchTerm.toLowerCase()));
+      applicantName.includes(s) ||
+      id.includes(s) ||
+      phone.includes(searchTerm) ||
+      email.includes(s) ||
+      city.includes(s) ||
+      businessName.includes(s) ||
+      mapEnquiryMessage.includes(s);
 
     const matchesFormType = selectedFormType === 'all' || app.formType === selectedFormType;
     const matchesStatus = selectedStatus === 'all' || app.status === selectedStatus;
@@ -223,7 +253,17 @@ export function Applications() {
                 </tr>
               ) : (
                 filteredSubmissions.map((app) => {
-                  const config = FORM_TYPE_CONFIG[app.formType];
+                  const config = FORM_TYPE_CONFIG[app.formType] || {
+                    label: app.formType || 'Application',
+                    shortCode: 'APP',
+                    sourceFile: '',
+                    badgeColor: 'bg-stone-50 text-stone-700 border-stone-200',
+                    description: 'Application Dossier'
+                  };
+
+                  const safePhone = (app.phone || '').replace(/[^0-9]/g, '');
+                  const safeApplicant = app.applicantName || 'Applicant';
+                  const safeId = app.id || '';
 
                   return (
                     <tr key={app.id} className="hover:bg-[#FAF9F6]/80 transition-colors">
@@ -232,7 +272,7 @@ export function Applications() {
                           onClick={() => setActiveModalApp(app)}
                           className="hover:underline font-bold text-[#10367D] cursor-pointer text-left"
                         >
-                          {app.id}
+                          {safeId}
                         </button>
                       </td>
 
@@ -243,18 +283,18 @@ export function Applications() {
                       </td>
 
                       <td className="p-3.5">
-                        <div className="font-extrabold text-[#10367D] text-sm">{app.applicantName}</div>
+                        <div className="font-extrabold text-[#10367D] text-sm">{safeApplicant}</div>
                         <div className="text-[11px] text-[#1A4594]/70 font-medium truncate max-w-[200px]">
-                          {app.businessName || app.mapServiceInterest || app.propertyType || app.loanPurpose || app.city}
+                          {app.businessName || app.mapServiceInterest || app.propertyType || app.loanPurpose || app.city || 'Applicant'}
                         </div>
                       </td>
 
                       <td className="p-3.5 space-y-0.5">
                         <div className="font-semibold text-stone-800 flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-[#1A4594]" /> {app.phone}
+                          <Phone className="w-3 h-3 text-[#1A4594]" /> {app.phone || 'N/A'}
                         </div>
                         <div className="text-[11px] text-[#1A4594]/70 truncate max-w-[180px]">
-                          {app.email}
+                          {app.email || 'N/A'}
                         </div>
                       </td>
 
@@ -277,7 +317,7 @@ export function Applications() {
                       </td>
 
                       <td className="p-3.5 text-[#1A4594]/70 whitespace-nowrap">
-                        {app.timestamp}
+                        {app.timestamp || 'Recent'}
                       </td>
 
                       <td className="p-3.5">
@@ -292,7 +332,7 @@ export function Applications() {
                             ? 'bg-red-50 text-red-700 border-red-200'
                             : 'bg-stone-50 text-stone-700 border-stone-200'
                         }`}>
-                          {app.status}
+                          {app.status || 'Pending'}
                         </span>
                       </td>
 
@@ -307,7 +347,7 @@ export function Applications() {
                           </button>
 
                           <a
-                            href={`https://wa.me/${app.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${app.applicantName}, Build Bharat Team is reviewing your application #${app.id}.`)}`}
+                            href={`https://wa.me/${safePhone}?text=${encodeURIComponent(`Hello ${safeApplicant}, Build Bharat Team is reviewing your application #${safeId}.`)}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             title="Direct WhatsApp"
@@ -348,15 +388,23 @@ export function Applications() {
                   <span className="font-mono text-xs font-extrabold text-[#10367D] bg-[#FAF9F6] px-2.5 py-0.5 rounded border border-[#10367D]/15">
                     {activeModalApp.id}
                   </span>
-                  <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${FORM_TYPE_CONFIG[activeModalApp.formType].badgeColor}`}>
-                    {FORM_TYPE_CONFIG[activeModalApp.formType].label}
-                  </span>
+                  {(() => {
+                    const modalConfig = FORM_TYPE_CONFIG[activeModalApp.formType] || {
+                      label: activeModalApp.formType || 'Application',
+                      badgeColor: 'bg-stone-50 text-stone-700 border-stone-200'
+                    };
+                    return (
+                      <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${modalConfig.badgeColor}`}>
+                        {modalConfig.label}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <h3 className="text-xl font-sora font-extrabold text-[#10367D]">
                   {activeModalApp.applicantName}
                 </h3>
                 <span className="text-xs text-[#1A4594]/70 font-sans">
-                  Source: <code className="text-[#10367D] font-mono">{activeModalApp.sourceFile}</code>
+                  Source: <code className="text-[#10367D] font-mono">{activeModalApp.sourceFile || 'Direct Inbound'}</code>
                 </span>
               </div>
 

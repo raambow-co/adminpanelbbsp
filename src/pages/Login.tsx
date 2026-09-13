@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { motion } from 'framer-motion';
-import { Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Eye, EyeOff, ArrowRight, AlertCircle } from 'lucide-react';
 
 export function Login() {
   const { login } = useAuth();
@@ -9,12 +9,29 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage('');
+
+    if (!adminId.trim()) {
+      setErrorMessage('Please enter your Admin ID or Email.');
+      return;
+    }
+
+    if (!password.trim()) {
+      setErrorMessage('Please enter your Password.');
+      return;
+    }
+
     setIsLoading(true);
     setTimeout(() => {
-      login(adminId || 'sudheer.reddy@bbsp.in', password || 'admin');
+      const success = login(adminId, password);
+      setIsLoading(false);
+      if (!success) {
+        setErrorMessage('Invalid ID/Email or Password. Access denied.');
+      }
     }, 400);
   };
 
@@ -39,9 +56,27 @@ export function Login() {
             
             {/* Login Heading */}
             <h1 className="font-sora font-extrabold text-2xl text-[#10367D] mt-3 tracking-tight">
-              Login
+              Admin Login
             </h1>
+            <p className="text-xs text-[#1A4594]/60 font-semibold mt-1">
+              Build Bharat Synergy Partners
+            </p>
           </div>
+
+          {/* Error Message Alert */}
+          <AnimatePresence>
+            {errorMessage && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200/80 flex items-start gap-2.5 text-red-600 text-xs font-semibold"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+                <span>{errorMessage}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -49,9 +84,16 @@ export function Login() {
               <input
                 type="text"
                 value={adminId}
-                onChange={(e) => setAdminId(e.target.value)}
-                placeholder="ID / Email"
-                className="w-full px-4 py-3 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-sm font-semibold text-[#10367D] placeholder:text-[#1A4594]/45 focus:bg-white focus:outline-none focus:border-[#10367D] focus:ring-2 focus:ring-[#10367D]/10 transition-all"
+                onChange={(e) => {
+                  setAdminId(e.target.value);
+                  if (errorMessage) setErrorMessage('');
+                }}
+                placeholder="Admin ID or Email"
+                className={`w-full px-4 py-3 bg-[#FAF9F6] rounded-xl border text-sm font-semibold text-[#10367D] placeholder:text-[#1A4594]/45 focus:bg-white focus:outline-none transition-all ${
+                  errorMessage && !adminId.trim()
+                    ? 'border-red-400 focus:ring-2 focus:ring-red-300/30'
+                    : 'border-[#10367D]/15 focus:border-[#10367D] focus:ring-2 focus:ring-[#10367D]/10'
+                }`}
               />
             </div>
 
@@ -59,14 +101,22 @@ export function Login() {
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errorMessage) setErrorMessage('');
+                }}
                 placeholder="Password"
-                className="w-full pl-4 pr-11 py-3 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-sm font-semibold text-[#10367D] placeholder:text-[#1A4594]/45 focus:bg-white focus:outline-none focus:border-[#10367D] focus:ring-2 focus:ring-[#10367D]/10 transition-all"
+                className={`w-full pl-4 pr-11 py-3 bg-[#FAF9F6] rounded-xl border text-sm font-semibold text-[#10367D] placeholder:text-[#1A4594]/45 focus:bg-white focus:outline-none transition-all ${
+                  errorMessage && !password.trim()
+                    ? 'border-red-400 focus:ring-2 focus:ring-red-300/30'
+                    : 'border-[#10367D]/15 focus:border-[#10367D] focus:ring-2 focus:ring-[#10367D]/10'
+                }`}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3.5 text-[#1A4594]/50 hover:text-[#10367D] transition-colors p-1"
+                tabIndex={-1}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>

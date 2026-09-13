@@ -1,4 +1,4 @@
-import { db, collection, onSnapshot, query, orderBy } from '../lib/firebase';
+import { db, collection, onSnapshot } from '../lib/firebase';
 import { useState, useEffect } from 'react';
 import { 
   Users, 
@@ -29,12 +29,33 @@ export function Dashboard() {
 
   useEffect(() => {
     try {
-      const q = query(collection(db, 'submissions'), orderBy('submittedAt', 'desc'));
+      const q = collection(db, 'submissions');
       const unsubscribe = onSnapshot(q, (snapshot) => {
-        const liveList = snapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data()
-        })) as UnifiedSubmission[];
+        const liveList = snapshot.docs.map(d => {
+          const data = d.data() || {};
+          return {
+            id: d.id,
+            formType: data.formType || 'map-enquiry',
+            formName: data.formName || 'Submission',
+            sourceFile: data.sourceFile || '',
+            applicantName: data.applicantName || data.name || data.fullName || 'Anonymous Applicant',
+            phone: data.phone || data.mobileNumber || data.mobile || '',
+            email: data.email || '',
+            city: data.city || data.location || data.district || '',
+            state: data.state || '',
+            timestamp: data.timestamp || data.submittedAt || data.createdAt || 'Recent',
+            status: data.status || 'Pending',
+            ...data
+          };
+        }) as UnifiedSubmission[];
+
+        // Client-side sort: newest first
+        liveList.sort((a: any, b: any) => {
+          const tA = new Date(a.submittedAt || a.timestamp || a.createdAt || 0).getTime();
+          const tB = new Date(b.submittedAt || b.timestamp || b.createdAt || 0).getTime();
+          return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+        });
+
         if (liveList.length > 0) {
           setSubmissions(liveList);
         }
@@ -56,14 +77,14 @@ export function Dashboard() {
 
   // KPIs
   const totalSubmissions = submissions.length;
-  const mapDeskLeads = submissions.filter(s => s.formType === 'map-enquiry').length;
-  const partnerRegistrations = submissions.filter(s => s.formType === 'partner-registration').length;
+  const mapDeskLeads = submissions.filter(s => s?.formType === 'map-enquiry').length;
+  const partnerRegistrations = submissions.filter(s => s?.formType === 'partner-registration').length;
   const totalVerifiedRevenue = partnerRegistrations * 5000;
   const totalLoansRequestedCr = (submissions
-    .filter(s => s.requiredAmount)
+    .filter(s => Boolean(s?.requiredAmount))
     .reduce((acc, curr) => {
-      const num = parseInt(curr.requiredAmount?.replace(/[^0-9]/g, '') || '0', 10);
-      return acc + num;
+      const num = parseInt((curr.requiredAmount || '').replace(/[^0-9]/g, '') || '0', 10);
+      return acc + (isNaN(num) ? 0 : num);
     }, 0) / 10000000).toFixed(2);
 
   return (
@@ -276,30 +297,40 @@ export function Dashboard() {
             </thead>
             <tbody className="divide-y divide-[#10367D]/5 text-[#10367D]">
               {submissions.slice(0, 5).map((item) => {
-                const config = FORM_TYPE_CONFIG[item.formType];
+                const config = FORM_TYPE_CONFIG[item.formType] || {
+                  label: item.formType || 'Submission',
+                  shortCode: 'SUB',
+                  sourceFile: '',
+                  badgeColor: 'bg-stone-50 text-stone-700 border-stone-200',
+                  description: 'Inbound Submission'
+                };
+
+                const safePhone = (item.phone || '').replace(/[^0-9]/g, '');
+                const safeApplicant = item.applicantName || 'Applicant';
+                const safeId = item.id || '';
 
                 return (
                   <tr key={item.id} className="hover:bg-[#FAF9F6]/60 transition-colors">
-                    <td className="p-3 font-mono font-bold">{item.id}</td>
+                    <td className="p-3 font-mono font-bold">{safeId}</td>
                     <td className="p-3">
                       <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${config.badgeColor}`}>
                         {config.label}
                       </span>
                     </td>
-                    <td className="p-3 font-bold">{item.applicantName}</td>
-                    <td className="p-3 text-[#1A4594]/80">{item.city}</td>
+                    <td className="p-3 font-bold">{safeApplicant}</td>
+                    <td className="p-3 text-[#1A4594]/80">{item.city || 'N/A'}</td>
                     <td className="p-3 font-mono font-bold">
                       {item.amountPaid || item.requiredAmount || item.budgetRange || 'Inquiry'}
                     </td>
                     <td className="p-3">
                       <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-50 text-[#10367D] border border-blue-200">
-                        {item.status}
+                        {item.status || 'Pending'}
                       </span>
                     </td>
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <a
-                          href={`https://wa.me/${item.phone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(`Hello ${item.applicantName}, Build Bharat Team is reviewing your submission ${item.id}.`)}`}
+                          href={`https://wa.me/${safePhone}?text=${encodeURIComponent(`Hello ${safeApplicant}, Build Bharat Team is reviewing your submission ${safeId}.`)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           title="WhatsApp"
@@ -308,7 +339,7 @@ export function Dashboard() {
                           <MessageSquare className="w-3.5 h-3.5" />
                         </a>
                         <a
-                          href={`tel:${item.phone}`}
+                          href={`tel:${item.phone || ''}`}
                           title="Call"
                           className="p-1.5 rounded-lg bg-[#FAF9F6] text-[#10367D] border border-[#10367D]/15 text-decoration-none"
                         >

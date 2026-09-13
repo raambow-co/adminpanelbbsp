@@ -88,9 +88,14 @@ export function Companies() {
   const [selectedPillar, setSelectedPillar] = useState('All');
 
   const filteredCompanies = mockCompanies.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          c.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          c.city.toLowerCase().includes(searchTerm.toLowerCase());
+    const s = (searchTerm || '').trim().toLowerCase();
+    const name = (c.name || '').toLowerCase();
+    const category = (c.category || '').toLowerCase();
+    const city = (c.city || '').toLowerCase();
+
+    const matchesSearch = name.includes(s) || 
+                          category.includes(s) ||
+                          city.includes(s);
     const matchesPillar = selectedPillar === 'All' || c.pillar === selectedPillar;
     return matchesSearch && matchesPillar;
   });

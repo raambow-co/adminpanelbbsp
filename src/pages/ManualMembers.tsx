@@ -191,15 +191,24 @@ export function ManualMembers() {
   const branches = ['All', 'Hyderabad Office', 'Vijayawada Office', 'Tirupati Office', 'Visakhapatnam Office', 'Bengaluru Office'];
 
   const filtered = manualList.filter(m => {
-    const matchesSearch = 
-      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.phone.includes(searchTerm) ||
-      m.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.hubLocation.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.notes.toLowerCase().includes(searchTerm.toLowerCase());
+    const s = (searchTerm || '').trim().toLowerCase();
+    const name = (m.name || '').toLowerCase();
+    const phone = (m.phone || '');
+    const id = (m.id || '').toLowerCase();
+    const email = (m.email || '').toLowerCase();
+    const hubLocation = (m.hubLocation || '').toLowerCase();
+    const notes = (m.notes || '').toLowerCase();
 
-    const matchesBranch = selectedBranch === 'All' || m.hubLocation.toLowerCase().includes(selectedBranch.toLowerCase().replace(' office', ''));
+    const matchesSearch = 
+      name.includes(s) ||
+      phone.includes(searchTerm) ||
+      id.includes(s) ||
+      email.includes(s) ||
+      hubLocation.includes(s) ||
+      notes.includes(s);
+
+    const branchTarget = (selectedBranch || '').toLowerCase().replace(' office', '');
+    const matchesBranch = selectedBranch === 'All' || hubLocation.includes(branchTarget);
 
     return matchesSearch && matchesBranch;
   });

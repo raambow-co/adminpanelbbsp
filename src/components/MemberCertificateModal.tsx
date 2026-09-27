@@ -40,15 +40,6 @@ export function MemberCertificateModal({ member, onClose, onSentToast }: MemberC
   const [isReady, setIsReady] = useState(false);
   const imageBlobRef = useRef<Blob | null>(null);
 
-  if (!member) return null;
-
-  const rawPhone = (member.phone || '').replace(/\D/g, '');
-  const formattedPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone.startsWith('91') ? rawPhone : `91${rawPhone}`;
-  const feeAmount = member.amountPaid || '₹5,000';
-  const dateStr = member.date || '29 August 2026';
-  const memberName = member.name || 'Member';
-  const fileName = `${memberName.replace(/\s+/g, '_')}_BBSP_Quotation.png`;
-
   // Pre-render certificate into high-res Blob
   const preRenderImage = useCallback(async () => {
     if (!certificateRef.current) return;
@@ -71,11 +62,21 @@ export function MemberCertificateModal({ member, onClose, onSentToast }: MemberC
   }, []);
 
   useEffect(() => {
+    if (!member) return;
     const timer = setTimeout(() => {
       preRenderImage();
     }, 250);
     return () => clearTimeout(timer);
-  }, [preRenderImage]);
+  }, [member, preRenderImage]);
+
+  if (!member) return null;
+
+  const rawPhone = (member.phone || '').replace(/\D/g, '');
+  const formattedPhone = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone.startsWith('91') ? rawPhone : `91${rawPhone}`;
+  const feeAmount = member.amountPaid || '₹5,000';
+  const dateStr = member.date || '29 August 2026';
+  const memberName = member.name || 'Member';
+  const fileName = `${memberName.replace(/\s+/g, '_')}_BBSP_Quotation.png`;
 
   // Unified 1-Click WhatsApp Action
   const handleSingleClickWhatsApp = async () => {

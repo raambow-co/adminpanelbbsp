@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '../components/PageHeader';
+import { ConfirmationModal, type FieldChange } from '../components/ConfirmationModal';
 import { 
   BookOpen, 
   Search, 
@@ -19,7 +20,9 @@ import {
   Send, 
   ShieldCheck, 
   FileText,
-  DollarSign
+  DollarSign,
+  Edit,
+  Trash2
 } from 'lucide-react';
 
 export type WorkCategory = 'Solar' | 'Real Estate' | 'Course' | 'Loan';
@@ -263,8 +266,42 @@ const initialEntries: CommissionEntry[] = [
 ];
 
 export function AccountsBook() {
-  const [members, setMembers] = useState<MemberWallet[]>(initialMembers);
-  const [entries, setEntries] = useState<CommissionEntry[]>(initialEntries);
+  const [members, setMembers] = useState<MemberWallet[]>(() => {
+    try {
+      const saved = localStorage.getItem('bbsp_accounts_members');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return initialMembers;
+  });
+
+  const [entries, setEntries] = useState<CommissionEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('bbsp_accounts_entries');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    return initialEntries;
+  });
+
+  // Save to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('bbsp_accounts_members', JSON.stringify(members));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [members]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('bbsp_accounts_entries', JSON.stringify(entries));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [entries]);
   
   // Filtering & Search
   const [searchTerm, setSearchTerm] = useState('');
@@ -278,6 +315,32 @@ export function AccountsBook() {
   const [showPassbookModal, setShowPassbookModal] = useState(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
   
+  // Edit Modals
+  const [editingEntry, setEditingEntry] = useState<CommissionEntry | null>(null);
+  const [editEntryForm, setEditEntryForm] = useState<{
+    projectTitle: string;
+    dealAmount: string;
+    commissionAmount: string;
+    workCategory: WorkCategory;
+    customDateTime: string;
+    notes: string;
+  }>({
+    projectTitle: '',
+    dealAmount: '',
+    commissionAmount: '',
+    workCategory: 'Solar',
+    customDateTime: '',
+    notes: ''
+  });
+
+  // Double Confirmation Security state
+  const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<CommissionEntry | null>(null);
+  const [confirmModifyEntryPending, setConfirmModifyEntryPending] = useState<{
+    original: CommissionEntry;
+    updated: CommissionEntry;
+    changes: FieldChange[];
+  } | null>(null);
+
   // Modal Context State
   const [activeMember, setActiveMember] = useState<MemberWallet | null>(null);
   const [activeEntry, setActiveEntry] = useState<CommissionEntry | null>(null);
@@ -285,7 +348,7 @@ export function AccountsBook() {
 
   // New Commission Form State
   const [newCommission, setNewCommission] = useState({
-    memberId: initialMembers[0].id,
+    memberId: initialMembers[0]?.id || 'BBSP-001',
     workCategory: 'Solar' as WorkCategory,
     projectTitle: '',
     dealAmount: '',
@@ -458,7 +521,7 @@ export function AccountsBook() {
 
     // Reset Form
     setNewCommission({
-      memberId: initialMembers[0].id,
+      memberId: members[0]?.id || 'BBSP-001',
       workCategory: 'Solar',
       projectTitle: '',
       dealAmount: '',
@@ -466,6 +529,136 @@ export function AccountsBook() {
       customDateTime: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
       notes: ''
     });
+  };
+
+  // Open Edit Modal for an Entry
+  const openEditEntryModal = (entry: CommissionEntry) => {
+    setEditingEntry(entry);
+    setEditEntryForm({
+      projectTitle: entry.projectTitle,
+      dealAmount: entry.dealAmount ? entry.dealAmount.toString() : '0',
+      commissionAmount: entry.commissionAmount.toString(),
+      workCategory: entry.workCategory,
+      customDateTime: entry.dateTime,
+      notes: entry.notes || ''
+    });
+  };
+
+  // Submit Edit Entry -> Intercepted by Double Confirmation
+  const handleEditEntrySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEntry) return;
+
+    const newComm = parseFloat(editEntryForm.commissionAmount) || 0;
+    const newDeal = parseFloat(editEntryForm.dealAmount) || 0;
+
+    const updated: CommissionEntry = {
+      ...editingEntry,
+      projectTitle: editEntryForm.projectTitle.trim(),
+      dealAmount: newDeal,
+      commissionAmount: newComm,
+      workCategory: editEntryForm.workCategory,
+      dateTime: editEntryForm.customDateTime.trim() || editingEntry.dateTime,
+      notes: editEntryForm.notes.trim()
+    };
+
+    const changes: FieldChange[] = [];
+    if (editingEntry.projectTitle !== updated.projectTitle) {
+      changes.push({ field: 'Project / Description', from: editingEntry.projectTitle, to: updated.projectTitle });
+    }
+    if (editingEntry.workCategory !== updated.workCategory) {
+      changes.push({ field: 'Work Vertical', from: editingEntry.workCategory, to: updated.workCategory });
+    }
+    if (editingEntry.dealAmount !== updated.dealAmount) {
+      changes.push({ field: 'Deal Amount', from: formatINR(editingEntry.dealAmount), to: formatINR(updated.dealAmount) });
+    }
+    if (editingEntry.commissionAmount !== updated.commissionAmount) {
+      changes.push({ field: 'Commission Figure', from: formatINR(editingEntry.commissionAmount), to: formatINR(updated.commissionAmount) });
+    }
+    if (editingEntry.dateTime !== updated.dateTime) {
+      changes.push({ field: 'Date & Time', from: editingEntry.dateTime, to: updated.dateTime });
+    }
+
+    if (changes.length === 0) {
+      setEditingEntry(null);
+      triggerToast('No ledger modifications detected.');
+      return;
+    }
+
+    setEditingEntry(null);
+    setConfirmModifyEntryPending({
+      original: editingEntry,
+      updated,
+      changes
+    });
+  };
+
+  // Commit Entry Modification after 2nd Confirmation
+  const commitEntryModification = () => {
+    if (!confirmModifyEntryPending) return;
+    const { original, updated } = confirmModifyEntryPending;
+
+    // Recalibrate Member Wallet if Commission Amount Changed
+    const diff = updated.commissionAmount - original.commissionAmount;
+    if (diff !== 0 && original.type === 'CREDIT') {
+      setMembers(prev => prev.map(m => {
+        if (m.id === original.memberId) {
+          return {
+            ...m,
+            totalEarned: m.totalEarned + diff,
+            walletBalance: m.walletBalance + diff,
+            lastActive: 'Just now (Updated)'
+          };
+        }
+        return m;
+      }));
+    }
+
+    setEntries(prev => prev.map(e => e.id === updated.id ? updated : e));
+    setConfirmModifyEntryPending(null);
+    triggerToast(`Ledger Entry ${updated.voucherNo} updated successfully!`);
+  };
+
+  // Request Delete Entry -> Intercepted by Double Confirmation
+  const requestDeleteEntry = (entry: CommissionEntry) => {
+    setConfirmDeleteEntry(entry);
+  };
+
+  // Commit Delete Entry after 2nd Confirmation
+  const commitDeleteEntry = () => {
+    if (!confirmDeleteEntry) return;
+    const entry = confirmDeleteEntry;
+
+    // Safely Adjust Member Wallet Balance on Deletion
+    if (entry.type === 'CREDIT') {
+      setMembers(prev => prev.map(m => {
+        if (m.id === entry.memberId) {
+          return {
+            ...m,
+            totalEarned: Math.max(0, m.totalEarned - entry.commissionAmount),
+            walletBalance: Math.max(0, m.walletBalance - entry.commissionAmount),
+            lastActive: 'Just now (Entry Purged)'
+          };
+        }
+        return m;
+      }));
+    } else if (entry.type === 'DEBIT_CLEARANCE') {
+      setMembers(prev => prev.map(m => {
+        if (m.id === entry.memberId) {
+          return {
+            ...m,
+            walletBalance: m.walletBalance + entry.commissionAmount,
+            totalCleared: Math.max(0, m.totalCleared - entry.commissionAmount),
+            lastActive: 'Just now (Clearance Reverted)'
+          };
+        }
+        return m;
+      }));
+    }
+
+    setEntries(prev => prev.filter(e => e.id !== entry.id));
+    setConfirmDeleteEntry(null);
+    triggerToast(`Ledger Voucher ${entry.voucherNo} (${formatINR(entry.commissionAmount)}) deleted and member balance adjusted.`);
   };
 
   // Open Clearance Modal for a Member
@@ -576,7 +769,7 @@ export function AccountsBook() {
   };
 
   return (
-    <div className="space-y-6 relative pb-10">
+    <div className="space-y-6 relative pb-10 text-left font-sans">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#10367D] text-white px-5 py-3.5 rounded-2xl shadow-2xl border border-[#A5CEE0]/40 flex items-center gap-3 animate-bounce">
@@ -585,23 +778,69 @@ export function AccountsBook() {
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* SECURITY DOUBLE CONFIRMATION: DELETE ENTRY */}
+      {/* ========================================================================= */}
+      {confirmDeleteEntry && (
+        <ConfirmationModal
+          isOpen={true}
+          type="delete"
+          title={`Delete Voucher ${confirmDeleteEntry.voucherNo}?`}
+          subtitle={`Are you sure you want to permanently delete this financial record for ${confirmDeleteEntry.memberName}?`}
+          requireDoubleConfirmation={true}
+          itemDetails={[
+            { label: 'Voucher No', value: confirmDeleteEntry.voucherNo, highlight: true },
+            { label: 'Member Name', value: `${confirmDeleteEntry.memberName} (${confirmDeleteEntry.memberId})` },
+            { label: 'Commission Figure', value: formatINR(confirmDeleteEntry.commissionAmount), highlight: true },
+            { label: 'Vertical', value: confirmDeleteEntry.workCategory },
+            { label: 'Type', value: confirmDeleteEntry.type }
+          ]}
+          warningMessage="Auditing Safeguard: Deleting this financial entry will automatically reverse the amount from the member's wallet balance."
+          confirmButtonText="Yes, Permanently Delete Entry"
+          onConfirm={commitDeleteEntry}
+          onClose={() => setConfirmDeleteEntry(null)}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* SECURITY DOUBLE CONFIRMATION: MODIFY ENTRY */}
+      {/* ========================================================================= */}
+      {confirmModifyEntryPending && (
+        <ConfirmationModal
+          isOpen={true}
+          type="modify"
+          title={`Confirm Changes to Voucher ${confirmModifyEntryPending.original.voucherNo}`}
+          subtitle={`Please review the modifications to ${confirmModifyEntryPending.original.memberName}'s commission record.`}
+          requireDoubleConfirmation={true}
+          changesSummary={confirmModifyEntryPending.changes}
+          itemDetails={[
+            { label: 'Voucher Ref', value: confirmModifyEntryPending.original.voucherNo },
+            { label: 'Member', value: confirmModifyEntryPending.original.memberName }
+          ]}
+          warningMessage="Financial modification will automatically adjust the associated member's live wallet balance."
+          confirmButtonText="Confirm & Save Updates"
+          onConfirm={commitEntryModification}
+          onClose={() => setConfirmModifyEntryPending(null)}
+        />
+      )}
+
       {/* Page Header */}
       <PageHeader
         title="Accounts Book & Commission Ledger"
-        description="Record commission payouts for Solar, Real Estate, Courses, and Loans with automatic member wallet updates & settlements."
+        description="Full access to add, edit, adjust, and purge commission payouts with automatic member wallet recalculation & 2-step verification."
         badge="Live Financial Ledger"
         action={
           <div className="flex items-center gap-2.5">
             <button
               onClick={exportToCSV}
-              className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-[#FAF9F6] text-[#10367D] border border-[#10367D]/15 rounded-xl text-xs font-bold transition-all shadow-sm"
+              className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-[#FAF9F6] text-[#10367D] border border-[#10367D]/15 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer active:scale-95"
             >
               <Download className="w-3.5 h-3.5 text-[#1A4594]" />
               Export Statement
             </button>
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#10367D] hover:bg-[#1A4594] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#10367D]/25"
+              className="flex items-center gap-2 px-4 py-2 bg-[#10367D] hover:bg-[#1A4594] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#10367D]/25 cursor-pointer active:scale-95"
             >
               <Plus className="w-3.5 h-3.5 text-[#A5CEE0]" />
               Add Commission Entry
@@ -715,104 +954,75 @@ export function AccountsBook() {
         </div>
       </div>
 
-      {/* MEMBER WALLET CAROUSEL / QUICK SELECTOR */}
+      {/* Member Wallets Quick Overview */}
       <div className="bbsp-card p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#10367D]/10 gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="font-sora font-extrabold text-base text-[#10367D] flex items-center gap-2">
-              <Wallet className="w-4 h-4 text-[#1A4594]" />
-              Member Wallets & Balances
+            <h3 className="font-sora font-extrabold text-base text-[#10367D]">
+              Member Wallets & Payout Desks
             </h3>
             <p className="text-xs text-[#1A4594]/80">
-              Click any member to open their complete digital passbook statement or clear their balance.
+              Click "Clear Wallet" to record bank/UPI payout, or "View Passbook" for full ledger audit.
             </p>
           </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[#1A4594]/70">Filter Member:</span>
-            <select
-              value={selectedMemberFilter}
-              onChange={(e) => setSelectedMemberFilter(e.target.value)}
-              className="px-3 py-1.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] outline-none"
-            >
-              <option value="All">All Members ({members.length})</option>
-              {members.map(m => (
-                <option key={m.id} value={m.id}>{m.id} - {m.name}</option>
-              ))}
-            </select>
-          </div>
+          <span className="text-xs font-bold text-[#10367D] bg-[#FAF9F6] px-3 py-1.5 rounded-xl border border-[#10367D]/15 self-start sm:self-auto">
+            {members.length} Registered Wallets
+          </span>
         </div>
 
-        {/* Member Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-3 gap-4 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {members.map((m) => (
-            <div 
-              key={m.id}
-              className={`p-4 rounded-2xl border transition-all ${
-                selectedMemberFilter === m.id 
-                  ? 'bg-blue-50/80 border-[#10367D] shadow-md ring-2 ring-[#10367D]/20' 
-                  : 'bg-[#FAF9F6] border-[#10367D]/12 hover:bg-white hover:border-[#10367D]/30 shadow-sm'
-              }`}
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-[10px] font-extrabold text-[#10367D] bg-white px-1.5 py-0.5 rounded border border-[#10367D]/15">
-                      {m.id}
-                    </span>
-                    <h4 className="font-sora font-extrabold text-sm text-[#10367D] truncate max-w-[130px]">
-                      {m.name}
-                    </h4>
+            <div key={m.id} className="p-4 rounded-2xl bg-[#FAF9F6] border border-[#10367D]/12 hover:border-[#10367D]/30 transition-all flex flex-col justify-between group">
+              <div>
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-white border border-[#10367D]/15 text-[#10367D]">
+                        {m.id}
+                      </span>
+                      <h4 className="font-sora font-extrabold text-sm text-[#10367D]">{m.name}</h4>
+                    </div>
+                    <p className="text-[11px] text-[#1A4594]/70 mt-0.5">{m.phone}</p>
                   </div>
-                  <p className="text-[10px] text-[#1A4594]/70 mt-0.5 font-medium">{m.phone}</p>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#10367D]/10 text-[#10367D]">
+                    {m.tier}
+                  </span>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-[#1A4594]/60 block">
-                    Wallet Balance
-                  </span>
-                  <span className="font-sora font-extrabold text-sm text-[#10367D]">
-                    {formatINR(m.walletBalance)}
-                  </span>
+                <div className="grid grid-cols-2 gap-2 my-3 p-2.5 rounded-xl bg-white border border-[#10367D]/8 text-xs">
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-500 block">Available Balance</span>
+                    <strong className="text-amber-700 font-sora font-extrabold text-sm">
+                      {formatINR(m.walletBalance)}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-semibold text-slate-500 block">Lifetime Cleared</span>
+                    <strong className="text-emerald-700 font-sora font-extrabold text-sm">
+                      {formatINR(m.totalCleared)}
+                    </strong>
+                  </div>
                 </div>
               </div>
 
-              <div className="mt-3 pt-2.5 border-t border-[#10367D]/10 flex items-center justify-between text-[11px]">
-                <div>
-                  <span className="text-[10px] text-[#1A4594]/70">Total: </span>
-                  <span className="font-bold text-emerald-700">{formatINR(m.totalEarned)}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] text-[#1A4594]/70">Cleared: </span>
-                  <span className="font-bold text-slate-700">{formatINR(m.totalCleared)}</span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="mt-3 pt-2 flex items-center gap-2">
+              <div className="flex items-center gap-2 pt-2 border-t border-[#10367D]/8">
                 <button
                   onClick={() => openPassbook(m.id)}
-                  className="flex-1 py-1.5 px-2 bg-white hover:bg-[#FAF9F6] border border-[#10367D]/15 rounded-xl text-[11px] font-bold text-[#10367D] flex items-center justify-center gap-1 transition-colors shadow-sm"
+                  className="flex-1 py-1.5 bg-white hover:bg-[#FAF9F6] border border-[#10367D]/15 rounded-xl text-xs font-bold text-[#10367D] transition-colors flex items-center justify-center gap-1 cursor-pointer"
                 >
-                  <BookOpen className="w-3 h-3 text-[#1A4594]" />
-                  <span>Passbook</span>
+                  <BookOpen className="w-3.5 h-3.5" /> Passbook
                 </button>
-
                 {m.walletBalance > 0 ? (
                   <button
                     onClick={() => openClearanceModal(m)}
-                    className="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 transition-colors shadow-sm shadow-emerald-600/20"
+                    className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-sm cursor-pointer"
                   >
-                    <CheckCircle2 className="w-3 h-3" />
-                    <span>Clear Balance</span>
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Clear
                   </button>
                 ) : (
-                  <button
-                    disabled
-                    className="flex-1 py-1.5 px-2 bg-slate-100 text-slate-400 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 cursor-not-allowed"
-                  >
-                    <span>All Cleared</span>
-                  </button>
+                  <span className="flex-1 py-1.5 text-center text-[11px] font-bold text-slate-400 bg-slate-100 rounded-xl">
+                    Settled
+                  </span>
                 )}
               </div>
             </div>
@@ -820,82 +1030,94 @@ export function AccountsBook() {
         </div>
       </div>
 
-      {/* ACCOUNTS BOOK LEDGER (FILE TABLE) */}
-      <div className="bbsp-card p-5 space-y-4">
-        {/* Table Search & Filter Bar */}
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 pb-3 border-b border-[#10367D]/10">
-          {/* Search Box */}
-          <div className="flex items-center gap-2.5 px-3.5 py-2 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-[#10367D] w-full lg:w-96">
+      {/* Filter and Search Bar for Ledger Entries */}
+      <div className="bbsp-card p-4">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 px-3.5 py-2 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-[#10367D] w-full md:w-80">
             <Search className="w-4 h-4 text-[#1A4594]/70" />
             <input 
-              type="text"
+              type="text" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by Voucher, Member ID, Project, Work..."
+              placeholder="Search voucher, member, project..."
               className="bg-transparent border-none outline-none text-xs font-medium placeholder:text-[#1A4594]/50 w-full text-[#10367D]"
             />
-            {searchTerm && (
-              <button onClick={() => setSearchTerm('')} className="text-xs text-[#1A4594]/50 hover:text-[#10367D]">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
           </div>
 
-          {/* Work Vertical Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
-            <span className="text-xs font-bold text-[#10367D] mr-1">Vertical:</span>
-            {['All', 'Solar', 'Real Estate', 'Course', 'Loan'].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${
-                  selectedCategory === cat 
-                    ? 'bg-[#10367D] text-white shadow-sm'
-                    : 'bg-[#FAF9F6] text-[#10367D]/70 hover:bg-[#10367D]/10 hover:text-[#10367D]'
-                }`}
+          <div className="flex items-center gap-3 w-full md:w-auto overflow-x-auto">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-[#10367D]">Status:</span>
+              {['All', 'In Wallet', 'Cleared'].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setSelectedStatus(st)}
+                  className={`text-xs font-bold px-2.5 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                    selectedStatus === st 
+                      ? 'bg-[#10367D] text-white shadow-sm'
+                      : 'bg-[#FAF9F6] text-[#10367D]/70 hover:bg-[#10367D]/10 hover:text-[#10367D]'
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-[#10367D]">Vertical:</span>
+              {['All', 'Solar', 'Real Estate', 'Course', 'Loan'].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`text-xs font-bold px-2.5 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
+                    selectedCategory === cat 
+                      ? 'bg-[#10367D] text-white shadow-sm'
+                      : 'bg-[#FAF9F6] text-[#10367D]/70 hover:bg-[#10367D]/10 hover:text-[#10367D]'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-[#10367D]">Member:</span>
+              <select
+                value={selectedMemberFilter}
+                onChange={(e) => setSelectedMemberFilter(e.target.value)}
+                className="bg-[#FAF9F6] border border-[#10367D]/15 text-[#10367D] text-xs font-bold rounded-xl px-2.5 py-1.5 outline-none cursor-pointer"
               >
-                {cat}
-              </button>
-            ))}
-          </div>
-
-          {/* Status Filter */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-[#10367D]">Status:</span>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-1.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] outline-none"
-            >
-              <option value="All">All Transactions ({entries.length})</option>
-              <option value="In Wallet">In Wallet (Credited)</option>
-              <option value="Cleared">Cleared / Paid Out</option>
-            </select>
+                <option value="All">All Members</option>
+                {members.map(m => (
+                  <option key={m.id} value={m.id}>{m.id} - {m.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
+      </div>
 
-        {/* The Accounts Book Table */}
+      {/* Comprehensive Ledger Table */}
+      <div className="bbsp-card overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
+          <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-[#10367D]/12 text-[#1A4594]/75 font-bold uppercase tracking-wider text-[10px] bg-[#FAF9F6]">
-                <th className="py-3 px-3.5 rounded-l-xl">Date & Time</th>
-                <th className="py-3 px-3">Voucher Ref</th>
-                <th className="py-3 px-3">Member Details</th>
-                <th className="py-3 px-3">Work Category</th>
-                <th className="py-3 px-3">Project / Deal Reference</th>
-                <th className="py-3 px-3 text-right">Deal Value</th>
-                <th className="py-3 px-3 text-right">Commission Impact</th>
-                <th className="py-3 px-3 text-center">Status</th>
-                <th className="py-3 px-3 text-right rounded-r-xl">Actions</th>
+              <tr className="border-b border-[#10367D]/10 text-[#1A4594]/70 font-bold uppercase tracking-wider text-[10px] bg-[#FAF9F6]">
+                <th className="py-3.5 px-3.5 rounded-l-lg">Date & Time</th>
+                <th className="py-3.5 px-3">Voucher Ref</th>
+                <th className="py-3.5 px-3">Member Details</th>
+                <th className="py-3.5 px-3">Work Vertical</th>
+                <th className="py-3.5 px-3">Project / Deal Reference</th>
+                <th className="py-3.5 px-3 text-right">Deal Value</th>
+                <th className="py-3.5 px-3 text-right">Commission Figure</th>
+                <th className="py-3.5 px-3 text-center">Status</th>
+                <th className="py-3.5 px-3 text-right rounded-r-lg">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#10367D]/8">
               {filteredEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-[#1A4594]/60">
-                    <p className="font-bold text-sm">No ledger entries match your filter criteria.</p>
-                    <p className="text-xs mt-1">Try resetting filters or adding a new commission entry.</p>
+                  <td colSpan={9} className="py-10 text-center text-[#1A4594]/60 font-semibold">
+                    No commission entries found matching your search.
                   </td>
                 </tr>
               ) : (
@@ -992,16 +1214,30 @@ export function AccountsBook() {
                           <button
                             onClick={() => openVoucher(entry)}
                             title="View / Print Digital Voucher Receipt"
-                            className="p-1.5 bg-white hover:bg-[#FAF9F6] border border-[#10367D]/15 rounded-lg text-[#10367D] transition-colors"
+                            className="p-1.5 bg-white hover:bg-[#FAF9F6] border border-[#10367D]/15 rounded-lg text-[#10367D] transition-colors cursor-pointer"
                           >
                             <FileText className="w-3.5 h-3.5 text-[#1A4594]" />
                           </button>
                           <button
                             onClick={() => openPassbook(entry.memberId)}
                             title="View Full Member Passbook"
-                            className="p-1.5 bg-white hover:bg-[#FAF9F6] border border-[#10367D]/15 rounded-lg text-[#10367D] transition-colors"
+                            className="p-1.5 bg-white hover:bg-[#FAF9F6] border border-[#10367D]/15 rounded-lg text-[#10367D] transition-colors cursor-pointer"
                           >
                             <BookOpen className="w-3.5 h-3.5 text-[#10367D]" />
+                          </button>
+                          <button
+                            onClick={() => openEditEntryModal(entry)}
+                            title="Edit Commission Record"
+                            className="p-1.5 bg-white hover:bg-[#FAF9F6] border border-[#10367D]/15 rounded-lg text-[#10367D] transition-colors cursor-pointer"
+                          >
+                            <Edit className="w-3.5 h-3.5 text-[#10367D]" />
+                          </button>
+                          <button
+                            onClick={() => requestDeleteEntry(entry)}
+                            title="Delete Entry (Double Confirmation)"
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg text-rose-600 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -1034,14 +1270,13 @@ export function AccountsBook() {
               </div>
               <button 
                 onClick={() => setShowAddModal(false)}
-                className="p-1.5 rounded-lg text-[#1A4594] hover:bg-[#FAF9F6]"
+                className="p-1.5 rounded-lg text-[#1A4594] hover:bg-[#FAF9F6] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             <form onSubmit={handleAddCommission} className="space-y-4 text-xs pt-1">
-              {/* Member Selection */}
               <div>
                 <label className="block font-bold text-[#10367D] mb-1">Select Member *</label>
                 <select
@@ -1058,7 +1293,6 @@ export function AccountsBook() {
                 </select>
               </div>
 
-              {/* Work Category Dropdown */}
               <div>
                 <label className="block font-bold text-[#10367D] mb-1">
                   Work / Vertical (Dropdown) *
@@ -1074,7 +1308,7 @@ export function AccountsBook() {
                         type="button"
                         key={cat}
                         onClick={() => setNewCommission({ ...newCommission, workCategory: cat })}
-                        className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all ${
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer ${
                           isSelected 
                             ? 'bg-[#10367D] text-white border-[#10367D] shadow-md shadow-[#10367D]/20' 
                             : 'bg-[#FAF9F6] text-[#10367D] border-[#10367D]/15 hover:bg-[#10367D]/10'
@@ -1088,7 +1322,6 @@ export function AccountsBook() {
                 </div>
               </div>
 
-              {/* Date & Time Column */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-[#10367D] mb-1">Date & Time Stamp *</label>
@@ -1103,76 +1336,67 @@ export function AccountsBook() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-[#10367D] mb-1">Deal / Project Value (₹)</label>
+                  <label className="block font-bold text-[#10367D] mb-1">Deal / Project Amount (₹)</label>
                   <input
                     type="number"
                     value={newCommission.dealAmount}
                     onChange={(e) => setNewCommission({ ...newCommission, dealAmount: e.target.value })}
-                    placeholder="e.g. 500000"
+                    placeholder="e.g. 550000"
                     className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
                   />
                 </div>
               </div>
 
-              {/* Commission Amount (Credited to Wallet) */}
               <div>
-                <label className="block font-bold text-[#10367D] mb-1">
-                  Commission Amount to Credit (₹) *
+                <label className="block font-bold text-emerald-800 mb-1">
+                  Commission Payout Amount (₹) * <span className="text-[10px] text-emerald-600 font-normal">(Directly added to member wallet)</span>
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-2.5 font-bold text-[#10367D] text-sm">₹</span>
-                  <input
-                    type="number"
-                    required
-                    value={newCommission.commissionAmount}
-                    onChange={(e) => setNewCommission({ ...newCommission, commissionAmount: e.target.value })}
-                    placeholder="e.g. 25000"
-                    className="w-full pl-8 pr-3.5 py-2.5 bg-emerald-50/50 rounded-xl border border-emerald-300 text-sm font-extrabold text-emerald-800 focus:bg-white focus:outline-none focus:border-emerald-600"
-                  />
-                </div>
-                <p className="text-[10px] text-emerald-700 font-semibold mt-1">
-                  ⚡ This commission will be automatically added to the member's live wallet balance.
-                </p>
+                <input
+                  type="number"
+                  required
+                  value={newCommission.commissionAmount}
+                  onChange={(e) => setNewCommission({ ...newCommission, commissionAmount: e.target.value })}
+                  placeholder="e.g. 20000"
+                  className="w-full px-3.5 py-2.5 bg-emerald-50/50 rounded-xl border border-emerald-300 text-sm font-extrabold text-emerald-900 focus:bg-white focus:outline-none focus:border-emerald-600"
+                />
               </div>
 
-              {/* Project / Deal Title */}
               <div>
-                <label className="block font-bold text-[#10367D] mb-1">Project / Client / Deal Title *</label>
+                <label className="block font-bold text-[#10367D] mb-1">Project / Deal Title *</label>
                 <input
                   type="text"
                   required
                   value={newCommission.projectTitle}
                   onChange={(e) => setNewCommission({ ...newCommission, projectTitle: e.target.value })}
-                  placeholder={`e.g. ${newCommission.workCategory === 'Solar' ? '5KW Rooftop Solar Installation - Hyderabad' : newCommission.workCategory === 'Real Estate' ? '200 Sq Yd Plot Booking - Highway City' : newCommission.workCategory === 'Course' ? 'Web Full Stack Certification Referral' : 'Home Loan ₹30 Lakhs Sanction'}`}
+                  placeholder="e.g. 10 KW Rooftop Solar EPC - Client: Ramesh Naidu"
                   className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
                 />
               </div>
 
-              {/* Notes / Voucher Reference */}
               <div>
-                <label className="block font-bold text-[#10367D] mb-1">Notes / Voucher Details</label>
-                <textarea
-                  rows={2}
+                <label className="block font-bold text-[#10367D] mb-1">Notes / Internal Reference</label>
+                <input
+                  type="text"
                   value={newCommission.notes}
                   onChange={(e) => setNewCommission({ ...newCommission, notes: e.target.value })}
-                  placeholder="Optional verification note or customer receipt reference..."
-                  className="w-full px-3.5 py-2 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-medium text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                  placeholder="e.g. Milestone 2 payment approved by Sudheer Reddy"
+                  className="w-full px-3.5 py-2 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
                 />
               </div>
 
-              {/* Form Buttons */}
               <div className="flex items-center gap-3 pt-3 border-t border-[#10367D]/10">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] font-bold text-xs"
+                  className="flex-1 py-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] font-bold text-xs cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-[#10367D] hover:bg-[#1A4594] text-white font-bold text-xs shadow-md shadow-[#10367D]/25"
+                  className="flex-1 py-2.5 rounded-xl bg-[#10367D] hover:bg-[#1A4594] text-white font-bold text-xs shadow-md shadow-[#10367D]/25 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
+                  <Plus className="w-4 h-4 text-[#A5CEE0]" />
                   Credit Commission to Wallet
                 </button>
               </div>
@@ -1182,26 +1406,149 @@ export function AccountsBook() {
       )}
 
       {/* ========================================================================= */}
-      {/* 2. WALLET CLEARANCE / SETTLEMENT MODAL */}
+      {/* 2. EDIT COMMISSION ENTRY MODAL */}
+      {/* ========================================================================= */}
+      {editingEntry && (
+        <div className="fixed inset-0 z-50 bg-[#10367D]/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-xl w-full border border-[#10367D]/15 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start justify-between pb-3 border-b border-[#10367D]/10">
+              <div>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                  Admin Edit Mode
+                </span>
+                <h3 className="font-sora font-extrabold text-xl text-[#10367D] mt-1">
+                  Edit Commission Record
+                </h3>
+                <p className="text-xs text-[#1A4594]/80">
+                  Voucher: <strong className="font-mono text-[#10367D]">{editingEntry.voucherNo}</strong> • Member: {editingEntry.memberName}
+                </p>
+              </div>
+              <button 
+                onClick={() => setEditingEntry(null)}
+                className="p-1.5 rounded-lg text-[#1A4594] hover:bg-[#FAF9F6] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditEntrySubmit} className="space-y-4 text-xs pt-1">
+              <div>
+                <label className="block font-bold text-[#10367D] mb-1">Work / Vertical *</label>
+                <select
+                  value={editEntryForm.workCategory}
+                  onChange={(e) => setEditEntryForm({ ...editEntryForm, workCategory: e.target.value as WorkCategory })}
+                  className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                >
+                  <option value="Solar">Solar Energy</option>
+                  <option value="Real Estate">Real Estate</option>
+                  <option value="Course">Course & Franchise</option>
+                  <option value="Loan">Loan & Microfinance</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#10367D] mb-1">Project / Description *</label>
+                <input
+                  type="text"
+                  required
+                  value={editEntryForm.projectTitle}
+                  onChange={(e) => setEditEntryForm({ ...editEntryForm, projectTitle: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#10367D] mb-1">Deal Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={editEntryForm.dealAmount}
+                    onChange={(e) => setEditEntryForm({ ...editEntryForm, dealAmount: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-emerald-800 mb-1">Commission Figure (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={editEntryForm.commissionAmount}
+                    onChange={(e) => setEditEntryForm({ ...editEntryForm, commissionAmount: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-emerald-50/50 rounded-xl border border-emerald-300 text-sm font-extrabold text-emerald-900 focus:bg-white focus:outline-none focus:border-emerald-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#10367D] mb-1">Date & Time Stamp</label>
+                <input
+                  type="text"
+                  value={editEntryForm.customDateTime}
+                  onChange={(e) => setEditEntryForm({ ...editEntryForm, customDateTime: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#10367D] mb-1">Notes / Ledger Remarks</label>
+                <input
+                  type="text"
+                  value={editEntryForm.notes}
+                  onChange={(e) => setEditEntryForm({ ...editEntryForm, notes: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                />
+              </div>
+
+              <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 text-amber-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                <p className="text-[11px] font-medium">
+                  Saving will open the 2-step review modal before applying changes. Member wallet balances will adjust accordingly.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-3 border-t border-[#10367D]/10">
+                <button
+                  type="button"
+                  onClick={() => setEditingEntry(null)}
+                  className="flex-1 py-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] font-bold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-[#10367D] hover:bg-[#1A4594] text-white font-bold text-xs shadow-md shadow-[#10367D]/25 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Edit className="w-4 h-4 text-[#A5CEE0]" />
+                  Review & Confirm Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. SETTLE / CLEAR WALLET MODAL */}
       {/* ========================================================================= */}
       {showClearModal && activeMember && (
-        <div className="fixed inset-0 z-50 bg-[#10367D]/50 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-[#10367D]/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-[#10367D]/15 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
             <div className="flex items-start justify-between pb-3 border-b border-[#10367D]/10">
               <div>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                  Wallet Settlement
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Accounts Book • Wallet Clearance
                 </span>
                 <h3 className="font-sora font-extrabold text-xl text-[#10367D] mt-1">
-                  Clear Member Wallet
+                  Clear Member Wallet Payout
                 </h3>
                 <p className="text-xs text-[#1A4594]/80">
-                  Settle wallet balance for <strong>{activeMember.name}</strong> ({activeMember.id})
+                  Settle wallet balance for <strong>{activeMember.name} ({activeMember.id})</strong>.
                 </p>
               </div>
               <button 
                 onClick={() => setShowClearModal(false)}
-                className="p-1.5 rounded-lg text-[#1A4594] hover:bg-[#FAF9F6]"
+                className="p-1.5 rounded-lg text-[#1A4594] hover:bg-[#FAF9F6] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1276,13 +1623,13 @@ export function AccountsBook() {
                 <button
                   type="button"
                   onClick={() => setShowClearModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] font-bold text-xs"
+                  className="flex-1 py-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] font-bold text-xs cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20"
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 cursor-pointer"
                 >
                   Confirm & Clear Wallet
                 </button>
@@ -1293,12 +1640,11 @@ export function AccountsBook() {
       )}
 
       {/* ========================================================================= */}
-      {/* 3. MEMBER DIGITAL PASSBOOK MODAL */}
+      {/* 4. MEMBER DIGITAL PASSBOOK MODAL */}
       {/* ========================================================================= */}
       {showPassbookModal && activeMember && (
         <div className="fixed inset-0 z-50 bg-[#10367D]/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-3xl w-full border border-[#10367D]/15 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
-            {/* Passbook Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-[#10367D]/12 gap-3">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-[#10367D] text-white flex items-center justify-center font-sora font-extrabold text-base shadow-md shadow-[#10367D]/20">
@@ -1322,21 +1668,20 @@ export function AccountsBook() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => window.print()}
-                  className="px-3 py-1.5 bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] rounded-xl text-xs font-bold border border-[#10367D]/15 flex items-center gap-1.5"
+                  className="px-3 py-1.5 bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] rounded-xl text-xs font-bold border border-[#10367D]/15 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>Print Passbook</span>
                 </button>
                 <button
                   onClick={() => setShowPassbookModal(false)}
-                  className="p-1.5 rounded-lg text-[#1A4594] hover:bg-[#FAF9F6]"
+                  className="p-1.5 rounded-lg text-[#1A4594] hover:bg-[#FAF9F6] cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
 
-            {/* Passbook Balance Strip */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3.5 bg-[#FAF9F6] rounded-2xl border border-[#10367D]/10">
                 <p className="text-[10px] font-bold text-[#1A4594]/70 uppercase">Total Earned</p>
@@ -1358,7 +1703,6 @@ export function AccountsBook() {
               </div>
             </div>
 
-            {/* Member Transaction History */}
             <div>
               <h4 className="font-sora font-bold text-xs text-[#10367D] mb-2 uppercase tracking-wider">
                 Passbook Statement & Audit Trail
@@ -1407,7 +1751,6 @@ export function AccountsBook() {
               </div>
             </div>
 
-            {/* Passbook Footer */}
             <div className="pt-3 border-t border-[#10367D]/10 flex flex-col sm:flex-row items-center justify-between text-xs text-[#1A4594]/80 gap-3">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
@@ -1420,7 +1763,7 @@ export function AccountsBook() {
                     setShowPassbookModal(false);
                     openClearanceModal(activeMember);
                   }}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-sm"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all shadow-sm cursor-pointer"
                 >
                   Clear Available Balance ({formatINR(activeMember.walletBalance)})
                 </button>
@@ -1431,16 +1774,15 @@ export function AccountsBook() {
       )}
 
       {/* ========================================================================= */}
-      {/* 4. DIGITAL COMMISSION VOUCHER / RECEIPT MODAL */}
+      {/* 5. DIGITAL COMMISSION VOUCHER / RECEIPT MODAL */}
       {/* ========================================================================= */}
       {showVoucherModal && activeEntry && (
         <div className="fixed inset-0 z-50 bg-[#10367D]/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-[#10367D]/15 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
-            {/* Voucher Header with Build Bharat Branding */}
             <div className="text-center pb-4 border-b border-[#10367D]/10 relative">
               <button 
                 onClick={() => setShowVoucherModal(false)}
-                className="absolute right-0 top-0 p-1.5 rounded-lg text-[#1A4594] hover:bg-[#FAF9F6]"
+                className="absolute right-0 top-0 p-1.5 rounded-lg text-[#1A4594] hover:bg-[#FAF9F6] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1448,84 +1790,64 @@ export function AccountsBook() {
                 COMMISSION VOUCHER & LEDGER RECEIPT
               </span>
               <h3 className="font-sora font-extrabold text-xl text-[#10367D] mt-1">
-                BUILD BHARAT SERVICES
+                Build Bharat Synergy Partners
               </h3>
-              <p className="text-[11px] text-[#1A4594]/80">
-                Voucher Ref: <strong className="font-mono text-[#10367D]">{activeEntry.voucherNo}</strong>
+              <p className="text-[11px] text-[#1A4594]/70 font-mono mt-0.5">
+                Voucher No: <strong className="text-[#10367D]">{activeEntry.voucherNo}</strong>
               </p>
             </div>
 
-            {/* Voucher Body Details */}
-            <div className="space-y-2.5 text-xs">
-              <div className="p-4 bg-[#FAF9F6] rounded-2xl border border-[#10367D]/10 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-[#1A4594] font-semibold">Date & Time:</span>
-                  <span className="font-bold text-[#10367D]">{activeEntry.dateTime}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#1A4594] font-semibold">Member ID:</span>
-                  <span className="font-mono font-bold text-[#10367D]">{activeEntry.memberId}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#1A4594] font-semibold">Beneficiary Name:</span>
-                  <span className="font-bold text-[#10367D]">{activeEntry.memberName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#1A4594] font-semibold">Work Category:</span>
-                  <span className="font-bold text-[#10367D] bg-white px-2 py-0.5 rounded border border-[#10367D]/15">
-                    {activeEntry.workCategory}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-[#1A4594] font-semibold">Project Reference:</span>
-                  <span className="font-bold text-[#10367D] text-right max-w-[200px] truncate">{activeEntry.projectTitle}</span>
-                </div>
-              </div>
-
-              {/* Commission Amount Callout */}
-              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-center">
-                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
-                  {activeEntry.type === 'CREDIT' ? 'Commission Amount Credited' : 'Settlement Payout Cleared'}
+            <div className="bg-[#FAF9F6] p-4 rounded-2xl border border-[#10367D]/10 space-y-3 text-xs">
+              <div className="flex justify-between items-center pb-2 border-b border-[#10367D]/10">
+                <span className="text-[#1A4594]/80">Member Beneficiary:</span>
+                <span className="font-sora font-extrabold text-[#10367D] text-sm">
+                  {activeEntry.memberName} ({activeEntry.memberId})
                 </span>
-                <p className="font-sora font-extrabold text-2xl text-emerald-900 mt-1">
-                  {formatINR(activeEntry.commissionAmount)}
-                </p>
-                <p className="text-[10px] text-emerald-700 font-semibold mt-0.5">
-                  Status: {activeEntry.status}
-                </p>
               </div>
-
-              {activeEntry.notes && (
-                <div className="p-3 bg-[#FAF9F6] rounded-xl text-[#10367D] text-[11px] font-medium border border-[#10367D]/10">
-                  <span className="font-bold">Notes: </span>{activeEntry.notes}
-                </div>
-              )}
+              <div className="flex justify-between items-center pb-2 border-b border-[#10367D]/10">
+                <span className="text-[#1A4594]/80">Work Category:</span>
+                <span className="font-bold text-[#10367D]">{activeEntry.workCategory}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-[#10367D]/10">
+                <span className="text-[#1A4594]/80">Project Description:</span>
+                <span className="font-bold text-[#10367D] truncate max-w-[200px]">{activeEntry.projectTitle}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b border-[#10367D]/10">
+                <span className="text-[#1A4594]/80">Transaction Type:</span>
+                <span className={`font-bold ${activeEntry.type === 'CREDIT' ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {activeEntry.type === 'CREDIT' ? 'Commission Credit (+)' : 'Wallet Debit Payout (-)'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center pt-1 text-sm">
+                <span className="font-bold text-[#10367D]">Voucher Amount:</span>
+                <span className="font-sora font-extrabold text-xl text-emerald-800">
+                  {formatINR(activeEntry.commissionAmount)}
+                </span>
+              </div>
             </div>
 
-            {/* Authorizer Sign */}
-            <div className="pt-3 border-t border-[#10367D]/10 flex items-center justify-between text-xs">
-              <div>
-                <p className="text-[10px] text-[#1A4594]/70 font-semibold">Authorized By:</p>
-                <p className="font-sora font-extrabold text-xs text-[#10367D]">Sudheer Reddy</p>
-                <p className="text-[9px] text-[#1A4594]/60">Managing Director & SuperAdmin</p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    const text = `*Build Bharat Commission Voucher*\nMember: ${activeEntry.memberName} (${activeEntry.memberId})\nCategory: ${activeEntry.workCategory}\nProject: ${activeEntry.projectTitle}\nAmount: ${formatINR(activeEntry.commissionAmount)}\nVoucher: ${activeEntry.voucherNo}\nDate: ${activeEntry.dateTime}`;
-                    window.open(`https://wa.me/${activeEntry.memberPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`, '_blank');
-                  }}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-sm"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>WhatsApp Slip</span>
-                </button>
-              </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] font-bold text-xs border border-[#10367D]/15 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" /> Print Voucher
+              </button>
+              <button
+                onClick={() => {
+                  const phone = (activeEntry.memberPhone || '').replace(/[^0-9]/g, '');
+                  const msg = `Official Commission Voucher from Build Bharat:\n\nVoucher Ref: ${activeEntry.voucherNo}\nMember: ${activeEntry.memberName} (${activeEntry.memberId})\nProject: ${activeEntry.projectTitle}\nAmount: ${formatINR(activeEntry.commissionAmount)}\nStatus: ${activeEntry.status}\n\nProcessed by Build Bharat SuperAdmin Sudheer Reddy.`;
+                  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Send className="w-4 h-4" /> Send on WhatsApp
+              </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

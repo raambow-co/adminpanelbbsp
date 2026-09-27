@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore, collection, doc, updateDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, doc, updateDoc, deleteDoc, setDoc, addDoc, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 export const firebaseConfig = {
@@ -16,5 +16,5 @@ export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfi
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-export { collection, doc, updateDoc, onSnapshot, query, orderBy };
+export { collection, doc, updateDoc, deleteDoc, setDoc, addDoc, onSnapshot, query, orderBy };
 export default app;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { MemberCertificateModal, type CertificateMember } from '../components/MemberCertificateModal';
+import { ConfirmationModal, type FieldChange } from '../components/ConfirmationModal';
 import { 
   Search, 
   Plus, 
@@ -11,10 +12,12 @@ import {
   Send, 
   CheckCircle2, 
   Trash2, 
+  Edit,
   Users, 
   CreditCard, 
   Building2, 
-  X 
+  X,
+  ShieldCheck
 } from 'lucide-react';
 
 export interface ManualMember {
@@ -45,6 +48,37 @@ export function ManualMembers() {
   });
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingMember, setEditingMember] = useState<ManualMember | null>(null);
+
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    phone: string;
+    email: string;
+    hubLocation: string;
+    tier: 'Premium Member' | 'Gold Member' | 'Executive Member' | 'Standard Member';
+    feeAmount: string;
+    paymentMode: string;
+    notes: string;
+  }>({
+    name: '',
+    phone: '',
+    email: '',
+    hubLocation: 'Hyderabad Main Office',
+    tier: 'Premium Member',
+    feeAmount: '5000',
+    paymentMode: 'Cash',
+    notes: ''
+  });
+
+  // Double Confirmation Security state
+  const [confirmDeleteMember, setConfirmDeleteMember] = useState<ManualMember | null>(null);
+  const [confirmModifyPending, setConfirmModifyPending] = useState<{
+    original: ManualMember;
+    updated: ManualMember;
+    changes: FieldChange[];
+  } | null>(null);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedBranch, setSelectedBranch] = useState('All');
   const [certificateMember, setCertificateMember] = useState<CertificateMember | null>(null);
@@ -153,12 +187,105 @@ export function ManualMembers() {
     });
   };
 
-  // Handle Delete Member
-  const handleDeleteMember = (id: string, name: string) => {
-    if (window.confirm(`Are you sure you want to remove ${name} (${id})?`)) {
-      setManualList(prev => prev.filter(m => m.id !== id));
-      showToast(`Member ${name} (${id}) removed from offline log.`);
+  // Open Edit Modal
+  const openEditModal = (m: ManualMember) => {
+    setEditingMember(m);
+    const rawFee = m.feePaid.replace(/[^0-9]/g, '') || '5000';
+    let mode = 'Cash';
+    if (m.feePaid.includes('Bank Transfer')) mode = 'Bank Transfer';
+    else if (m.feePaid.includes('UPI')) mode = 'UPI Online';
+    else if (m.feePaid.includes('Cheque')) mode = 'Cheque';
+
+    setEditForm({
+      name: m.name,
+      phone: m.phone,
+      email: m.email,
+      hubLocation: m.hubLocation,
+      tier: m.tier || 'Premium Member',
+      feeAmount: rawFee,
+      paymentMode: mode,
+      notes: m.notes
+    });
+    setShowEditModal(true);
+  };
+
+  // Submit Edit Form -> Intercepted by Double Confirmation
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember) return;
+
+    const formattedFee = `₹${Number(editForm.feeAmount || 5000).toLocaleString('en-IN')} (${editForm.paymentMode})`;
+    const updated: ManualMember = {
+      ...editingMember,
+      name: editForm.name.trim(),
+      phone: editForm.phone.trim(),
+      email: editForm.email.trim(),
+      hubLocation: editForm.hubLocation,
+      tier: editForm.tier,
+      feePaid: formattedFee,
+      notes: editForm.notes.trim()
+    };
+
+    const changes: FieldChange[] = [];
+    if (editingMember.name !== updated.name) {
+      changes.push({ field: 'Member Name', from: editingMember.name, to: updated.name });
     }
+    if (editingMember.phone !== updated.phone) {
+      changes.push({ field: 'Phone Number', from: editingMember.phone, to: updated.phone });
+    }
+    if (editingMember.email !== updated.email) {
+      changes.push({ field: 'Email Address', from: editingMember.email, to: updated.email });
+    }
+    if (editingMember.hubLocation !== updated.hubLocation) {
+      changes.push({ field: 'Office Branch', from: editingMember.hubLocation, to: updated.hubLocation });
+    }
+    if (editingMember.tier !== updated.tier) {
+      changes.push({ field: 'Membership Tier', from: editingMember.tier || 'Standard Member', to: updated.tier || 'Standard Member' });
+    }
+    if (editingMember.feePaid !== updated.feePaid) {
+      changes.push({ field: 'Fee Paid / Mode', from: editingMember.feePaid, to: updated.feePaid });
+    }
+    if (editingMember.notes !== updated.notes) {
+      changes.push({ field: 'Notes / Ref', from: editingMember.notes, to: updated.notes });
+    }
+
+    if (changes.length === 0) {
+      setShowEditModal(false);
+      showToast('No changes detected.');
+      return;
+    }
+
+    setShowEditModal(false);
+    setConfirmModifyPending({
+      original: editingMember,
+      updated,
+      changes
+    });
+  };
+
+  // Commit Edit after 2nd Confirmation
+  const commitMemberModification = () => {
+    if (!confirmModifyPending) return;
+    const { updated } = confirmModifyPending;
+
+    setManualList(prev => prev.map(m => m.id === updated.id ? updated : m));
+    setConfirmModifyPending(null);
+    setEditingMember(null);
+    showToast(`Manual Member ${updated.name} (${updated.id}) updated successfully!`);
+  };
+
+  // Trigger Delete Member -> Intercepted by Double Confirmation
+  const requestDeleteMember = (m: ManualMember) => {
+    setConfirmDeleteMember(m);
+  };
+
+  // Commit Delete after 2nd Confirmation
+  const commitDeleteMember = () => {
+    if (!confirmDeleteMember) return;
+    const { id, name } = confirmDeleteMember;
+    setManualList(prev => prev.filter(m => m.id !== id));
+    setConfirmDeleteMember(null);
+    showToast(`Manual Member ${name} (${id}) removed from offline log.`);
   };
 
   // Export to CSV
@@ -216,7 +343,7 @@ export function ManualMembers() {
   const nextIdPreview = getNextSequentialId();
 
   return (
-    <div className="space-y-6 relative">
+    <div className="space-y-6 relative text-left">
       {/* Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#10367D] text-white px-4 py-3 rounded-2xl shadow-xl border border-[#A5CEE0]/40 flex items-center gap-2.5 animate-bounce">
@@ -234,22 +361,68 @@ export function ManualMembers() {
         />
       )}
 
+      {/* ========================================================================= */}
+      {/* SECURITY DOUBLE CONFIRMATION: DELETE MODAL */}
+      {/* ========================================================================= */}
+      {confirmDeleteMember && (
+        <ConfirmationModal
+          isOpen={true}
+          type="delete"
+          title={`Delete Offline Record for ${confirmDeleteMember.name}?`}
+          subtitle={`Are you sure you want to permanently delete manual member ${confirmDeleteMember.id}?`}
+          requireDoubleConfirmation={true}
+          itemDetails={[
+            { label: 'Member ID', value: confirmDeleteMember.id, highlight: true },
+            { label: 'Name', value: confirmDeleteMember.name },
+            { label: 'Phone', value: confirmDeleteMember.phone },
+            { label: 'Office Hub', value: confirmDeleteMember.hubLocation },
+            { label: 'Fee Recorded', value: confirmDeleteMember.feePaid }
+          ]}
+          warningMessage="Purging this record will permanently remove the physical receipt log and sequential record."
+          confirmButtonText="Yes, Permanently Delete Record"
+          onConfirm={commitDeleteMember}
+          onClose={() => setConfirmDeleteMember(null)}
+        />
+      )}
+
+      {/* ========================================================================= */}
+      {/* SECURITY DOUBLE CONFIRMATION: MODIFY MODAL */}
+      {/* ========================================================================= */}
+      {confirmModifyPending && (
+        <ConfirmationModal
+          isOpen={true}
+          type="modify"
+          title={`Confirm Edits for ${confirmModifyPending.original.name}`}
+          subtitle={`Review modifications to manual member record ${confirmModifyPending.original.id} before saving.`}
+          requireDoubleConfirmation={true}
+          changesSummary={confirmModifyPending.changes}
+          itemDetails={[
+            { label: 'Member ID', value: confirmModifyPending.original.id },
+            { label: 'Office Hub', value: confirmModifyPending.original.hubLocation }
+          ]}
+          warningMessage="Modifying offline receipts updates internal records and quotation certificates."
+          confirmButtonText="Confirm & Save Updates"
+          onConfirm={commitMemberModification}
+          onClose={() => setConfirmModifyPending(null)}
+        />
+      )}
+
       {/* Header */}
       <PageHeader 
         title="Manual Members (Offline)"
-        description="Sequential offline members (BBSP-007, BBSP-008...) added from office hubs with full WhatsApp Quotation support."
+        description="Sequential offline members (BBSP-007, BBSP-008...) added from office hubs with full edit/delete access & 2-step confirmation."
         badge={`${manualList.length} Members`}
         action={
           <div className="flex items-center gap-2.5">
             <button 
               onClick={handleExportCSV}
-              className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-[#FAF9F6] text-[#10367D] border border-[#10367D]/15 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95"
+              className="flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-[#FAF9F6] text-[#10367D] border border-[#10367D]/15 rounded-xl text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" /> Export Log (CSV)
             </button>
             <button 
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#10367D] hover:bg-[#1A4594] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#10367D]/25 active:scale-95"
+              className="flex items-center gap-2 px-4 py-2 bg-[#10367D] hover:bg-[#1A4594] text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-[#10367D]/25 active:scale-95 cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5 text-[#A5CEE0]" /> Add Manual Member
             </button>
@@ -296,7 +469,7 @@ export function ManualMembers() {
           <div className="flex items-center gap-2.5 px-3.5 py-2 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-[#10367D] w-full md:w-80">
             <Search className="w-4 h-4 text-[#1A4594]/70" />
             <input 
-              type="text"
+              type="text" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search manual member by ID, name, phone, branch..."
@@ -310,7 +483,7 @@ export function ManualMembers() {
               <button
                 key={b}
                 onClick={() => setSelectedBranch(b)}
-                className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all whitespace-nowrap ${
+                className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                   selectedBranch === b 
                     ? 'bg-[#10367D] text-white shadow-sm'
                     : 'bg-[#FAF9F6] text-[#10367D]/70 hover:bg-[#10367D]/10 hover:text-[#10367D]'
@@ -398,15 +571,22 @@ export function ManualMembers() {
                         <button
                           onClick={() => openCertificate(m)}
                           title="Generate HD Quotation Certificate & Send on WhatsApp"
-                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 hover:scale-105 active:scale-95"
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 hover:scale-105 active:scale-95 cursor-pointer"
                         >
                           <Send className="w-3.5 h-3.5" />
                           <span>WhatsApp Quotation</span>
                         </button>
                         <button
-                          onClick={() => handleDeleteMember(m.id, m.name)}
-                          title="Remove Member"
-                          className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors"
+                          onClick={() => openEditModal(m)}
+                          title="Edit Member Details"
+                          className="p-1.5 rounded-xl text-[#10367D] hover:bg-[#10367D]/10 border border-transparent hover:border-[#10367D]/20 transition-colors cursor-pointer"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => requestDeleteMember(m)}
+                          title="Remove Member (Double Confirmation)"
+                          className="p-1.5 rounded-xl text-rose-500 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -420,7 +600,9 @@ export function ManualMembers() {
         </div>
       </div>
 
-      {/* Add Manual Member Modal */}
+      {/* ========================================================================= */}
+      {/* ADD MANUAL MEMBER MODAL */}
+      {/* ========================================================================= */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-[#10367D]/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-lg w-full border border-[#10367D]/15 shadow-2xl space-y-4 my-auto animate-in fade-in zoom-in duration-200">
@@ -435,7 +617,7 @@ export function ManualMembers() {
               </div>
               <button 
                 onClick={() => setShowAddModal(false)}
-                className="p-1.5 rounded-xl text-[#1A4594] hover:bg-[#FAF9F6]"
+                className="p-1.5 rounded-xl text-[#1A4594] hover:bg-[#FAF9F6] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -575,13 +757,13 @@ export function ManualMembers() {
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] font-bold text-xs"
+                  className="flex-1 py-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] font-bold text-xs cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-[#10367D] hover:bg-[#1A4594] text-white font-bold text-xs shadow-md shadow-[#10367D]/25 flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2.5 rounded-xl bg-[#10367D] hover:bg-[#1A4594] text-white font-bold text-xs shadow-md shadow-[#10367D]/25 flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Plus className="w-4 h-4 text-[#A5CEE0]" />
                   Save & Generate Quotation
@@ -591,6 +773,167 @@ export function ManualMembers() {
           </div>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* EDIT MANUAL MEMBER MODAL */}
+      {/* ========================================================================= */}
+      {showEditModal && editingMember && (
+        <div className="fixed inset-0 z-50 bg-[#10367D]/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-lg w-full border border-[#10367D]/15 shadow-2xl space-y-4 my-auto animate-in fade-in zoom-in duration-200">
+            <div className="flex items-start justify-between">
+              <div>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                  Admin Edit Mode
+                </span>
+                <h3 className="font-sora font-extrabold text-xl text-[#10367D] mt-1">
+                  Edit Manual Member
+                </h3>
+                <p className="text-xs text-[#1A4594]/80 mt-0.5">
+                  Sequential ID: <strong className="text-[#10367D] font-mono px-2 py-0.5 bg-[#FAF9F6] rounded border border-[#10367D]/20">{editingMember.id}</strong>
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowEditModal(false)}
+                className="p-1.5 rounded-xl text-[#1A4594] hover:bg-[#FAF9F6] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-3.5 text-xs pt-1">
+              <div>
+                <label className="block font-bold text-[#10367D] mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#10367D] mb-1">Phone Number *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#10367D] mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    required
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#10367D] mb-1">Office Hub / Branch</label>
+                  <select
+                    value={editForm.hubLocation}
+                    onChange={(e) => setEditForm({ ...editForm, hubLocation: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                  >
+                    <option value="Hyderabad Main Office">Hyderabad Main Office</option>
+                    <option value="Vijayawada Office">Vijayawada Office</option>
+                    <option value="Tirupati Office">Tirupati Office</option>
+                    <option value="Visakhapatnam Office">Visakhapatnam Office</option>
+                    <option value="Bengaluru Office">Bengaluru Office</option>
+                    <option value="Nandyal Office">Nandyal Office</option>
+                    <option value="Kurnool Office">Kurnool Office</option>
+                    <option value="Secretariat Office">Secretariat Office</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#10367D] mb-1">Membership Tier</label>
+                  <select
+                    value={editForm.tier}
+                    onChange={(e) => setEditForm({ ...editForm, tier: e.target.value as any })}
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                  >
+                    <option value="Premium Member">Premium Member</option>
+                    <option value="Gold Member">Gold Member</option>
+                    <option value="Executive Member">Executive Member</option>
+                    <option value="Standard Member">Standard Member</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-[#10367D] mb-1">Fee Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={editForm.feeAmount}
+                    onChange={(e) => setEditForm({ ...editForm, feeAmount: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#10367D] mb-1">Payment Mode</label>
+                  <select
+                    value={editForm.paymentMode}
+                    onChange={(e) => setEditForm({ ...editForm, paymentMode: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                  >
+                    <option value="Cash">Cash (Physical Receipt)</option>
+                    <option value="Bank Transfer">Bank Transfer / NEFT</option>
+                    <option value="UPI Online">UPI / QR Code</option>
+                    <option value="Cheque">Cheque</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-[#10367D] mb-1">Notes / Receipt Ref</label>
+                <input
+                  type="text"
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-[#FAF9F6] rounded-xl border border-[#10367D]/15 text-xs font-bold text-[#10367D] focus:bg-white focus:outline-none focus:border-[#10367D]"
+                />
+              </div>
+
+              <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 text-amber-900 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                <p className="text-[11px] font-medium">
+                  Saving will open the 2-step review modal to confirm all changes.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-[#FAF9F6] hover:bg-[#10367D]/10 text-[#10367D] font-bold text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-xl bg-[#10367D] hover:bg-[#1A4594] text-white font-bold text-xs shadow-md shadow-[#10367D]/25 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Edit className="w-4 h-4 text-[#A5CEE0]" />
+                  Review & Confirm Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

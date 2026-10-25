@@ -1,3 +1,4 @@
+import { db, collection, onSnapshot } from '../lib/firebase';
 import React, { useState, useEffect } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { MemberCertificateModal, type CertificateMember } from '../components/MemberCertificateModal';
@@ -48,6 +49,52 @@ export function Members() {
   });
 
   const [searchTerm, setSearchTerm] = useState('');
+  // Real-time Firestore sync with 'members' collection (Website Member Directory)
+  useEffect(() => {
+    try {
+      const q = collection(db, 'members');
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const liveMembers: MemberItem[] = snapshot.docs.map(docSnap => {
+          const data = docSnap.data();
+          return {
+            id: data.id || data.membershipCode || data.memberId || docSnap.id,
+            name: data.fullName || data.name || 'BBSP Partner',
+            tier: data.tier || 'Premium Member',
+            phone: data.phone || '',
+            email: data.email || docSnap.id,
+            state: data.state || data.city || 'National',
+            joinDate: data.joinedAt ? new Date(data.joinedAt).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'),
+            feePaid: data.amountPaid || '₹5,000',
+            isVerified: true
+          };
+        });
+
+        if (liveMembers.length > 0) {
+          setMembers(prev => {
+            const map = new Map<string, MemberItem>();
+            for (const m of liveMembers) {
+              map.set((m.email || '').toLowerCase().trim(), m);
+            }
+            for (const m of prev) {
+              const key = (m.email || '').toLowerCase().trim();
+              if (key && !map.has(key)) {
+                map.set(key, m);
+              }
+            }
+            const combined = Array.from(map.values());
+            try {
+              localStorage.setItem('bbsp_members_directory', JSON.stringify(combined));
+            } catch (e) {}
+            return combined;
+          });
+        }
+      });
+      return () => unsubscribe();
+    } catch (e) {
+      console.warn('Members Firestore listener notice:', e);
+    }
+  }, []);
+
   const [selectedTier, setSelectedTier] = useState('All');
   const [certificateMember, setCertificateMember] = useState<CertificateMember | null>(null);
   const [toast, setToast] = useState<string | null>(null);

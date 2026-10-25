@@ -1,4 +1,4 @@
-import { db, collection, doc, updateDoc, deleteDoc, onSnapshot } from '../lib/firebase';
+import { db, collection, doc, updateDoc, deleteDoc, onSnapshot, approveMemberInFirestore, updateSubmissionStatus, normalizeSubmissionStatus } from '../lib/firebase';
 import { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -67,7 +67,7 @@ export function Applications() {
             city: data.city || data.location || data.district || '',
             state: data.state || '',
             timestamp: data.timestamp || data.submittedAt || data.createdAt || 'Recent',
-            status: data.status || 'Pending',
+            status: normalizeSubmissionStatus(data.status, data.isApproved),
             ...data
           };
         }) as UnifiedSubmission[];
@@ -97,16 +97,40 @@ export function Applications() {
   };
 
   // Status Change with Direct Feedback
-  const handleStatusChange = (id: string, newStatus: SubmissionStatus, name: string) => {
+  
+  // Approve Member & Move to Website Member Directory
+  const handleApproveMember = async (app: UnifiedSubmission) => {
+    setSubmissions(prev => prev.map(a => a.id === app.id ? { ...a, status: 'Approved' as SubmissionStatus } : a));
+    if (activeModalApp && activeModalApp.id === app.id) {
+      setActiveModalApp(prev => prev ? { ...prev, status: 'Approved' as SubmissionStatus } : null);
+    }
+    showToast(`✓ ${app.applicantName} Approved! Added to Website Member Directory with login access.`);
+
+    try {
+      await approveMemberInFirestore(app);
+    } catch (e) {
+      console.error('Error during member approval:', e);
+    }
+  };
+
+  const handleStatusChange = async (id: string, newStatus: SubmissionStatus, name: string) => {
+    const target = submissions.find(a => a.id === id);
+    if (newStatus === 'Approved' && target) {
+      return handleApproveMember(target);
+    }
+
     setSubmissions(prev => prev.map(app => app.id === id ? { ...app, status: newStatus } : app));
     if (activeModalApp && activeModalApp.id === id) {
       setActiveModalApp(prev => prev ? { ...prev, status: newStatus } : null);
     }
     showToast(`Application #${id} (${name}) marked as "${newStatus}"!`);
-    try {
-      updateDoc(doc(db, 'submissions', id), { status: newStatus });
-    } catch (err) {
-      console.error('Error updating status in Firestore:', err);
+
+    if (target) {
+      try {
+        await updateSubmissionStatus(id, newStatus, target.email);
+      } catch (err) {
+        console.error('Error updating status in Firestore:', err);
+      }
     }
   };
 
@@ -433,21 +457,57 @@ export function Applications() {
         <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
           <Filter className="w-3.5 h-3.5 text-[#1A4594]/70 hidden sm:block" />
           <span className="text-xs font-bold text-[#10367D] hidden sm:block">Status:</span>
-          {['all', 'Approved', 'Underwriting', 'In Review', 'Contacted', 'Visit Scheduled', 'Rejected'].map((st) => (
-            <button
-              key={st}
-              onClick={() => setSelectedStatus(st)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                selectedStatus === st
-                  ? 'bg-[#10367D] text-white shadow-sm'
-                  : 'bg-white text-[#10367D] border border-[#10367D]/15 hover:bg-[#FAF9F6]'
-              }`}
-            >
-              {st === 'all' ? 'All Status' : st}
-            </button>
-          ))}
-        </div>
+          {[
+          { id: 'all', label: 'All Submissions', count: submissions.length },
+          { id: 'In Review', label: 'In Review', count: submissions.filter(s => s.status === 'In Review').length },
+          { id: 'Contacted', label: 'Contacted', count: submissions.filter(s => s.status === 'Contacted').length },
+          { id: 'Approved', label: 'Approved (Website Member Directory)', count: submissions.filter(s => s.status === 'Approved').length },
+          { id: 'Rejected', label: 'Rejected', count: submissions.filter(s => s.status === 'Rejected').length },
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setSelectedStatus(tab.id)}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              selectedStatus === tab.id
+                ? tab.id === 'Approved' ? 'bg-emerald-600 text-white shadow-sm'
+                : tab.id === 'Rejected' ? 'bg-rose-600 text-white shadow-sm'
+                : tab.id === 'Contacted' ? 'bg-blue-600 text-white shadow-sm'
+                : tab.id === 'In Review' ? 'bg-amber-500 text-slate-900 shadow-sm'
+                : 'bg-[#10367D] text-white shadow-sm'
+                : 'bg-white text-[#10367D] border border-[#10367D]/15 hover:bg-[#FAF9F6]'
+            }`}
+          >
+            <span>{tab.label}</span>
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10">
+              {tab.count}
+            </span>
+          </button>
+        ))}
       </div>
+      </div>
+
+      
+      {/* Banner for Website Member Directory Section */}
+      {selectedStatus === 'Approved' && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs text-emerald-800 shadow-sm animate-in fade-in duration-200">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="font-extrabold text-[#10367D] text-sm">Website Member Directory</h4>
+              <p className="text-emerald-700 text-xs mt-0.5">
+                All approved partners listed below have permanent login access granted to the website member portal with their registered Email ID.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-mono font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-xl border border-emerald-200">
+              {submissions.filter(s => s.status === 'Approved').length} Active Website Members
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* SUBMISSIONS TABLE */}
       <div className="bbsp-card overflow-hidden">
@@ -531,16 +591,43 @@ export function Applications() {
                       </td>
 
                       <td className="p-3.5">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                          app.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          app.status === 'Sanctioned' ? 'bg-emerald-100 text-emerald-800' :
-                          app.status === 'Underwriting' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
-                          app.status === 'Rejected' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
-                          'bg-blue-50 text-[#10367D] border border-blue-200'
-                        }`}>
-                          {app.status}
-                        </span>
-                      </td>
+    <div className="flex items-center gap-2">
+      {app.status !== 'Approved' ? (
+        <button
+          onClick={() => handleApproveMember(app)}
+          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer border-none shrink-0"
+          title="Approve applicant and move to Website Member Directory with instant login access"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span>Approve</span>
+        </button>
+      ) : (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+          <span>Member Active</span>
+        </span>
+      )}
+
+      <select
+        value={app.status}
+        onChange={(e) => handleStatusChange(app.id, e.target.value as SubmissionStatus, app.applicantName)}
+        className={`text-[11px] font-bold rounded-xl px-2.5 py-1 border outline-none cursor-pointer transition-colors ${
+          app.status === 'Approved'
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+            : app.status === 'Contacted'
+            ? 'bg-blue-50 text-blue-800 border-blue-200'
+            : app.status === 'Rejected'
+            ? 'bg-rose-50 text-rose-800 border-rose-200'
+            : 'bg-amber-50 text-amber-800 border-amber-200'
+        }`}
+      >
+        <option value="In Review">In Review</option>
+        <option value="Contacted">Contacted</option>
+        <option value="Approved">Approved</option>
+        <option value="Rejected">Rejected</option>
+      </select>
+    </div>
+  </td>
 
                       <td className="p-3.5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">

@@ -53,7 +53,7 @@ export function CustomerEnquiries() {
     city: '',
     mapServiceInterest: '',
     mapEnquiryMessage: '',
-    status: 'Pending'
+    status: 'In Review'
   });
 
   // Security Confirmation state
@@ -81,7 +81,7 @@ export function CustomerEnquiries() {
             city: data.city || data.location || data.district || '',
             state: data.state || '',
             timestamp: data.timestamp || data.submittedAt || data.createdAt || 'Recent',
-            status: data.status || 'Pending',
+            status: data.status || 'In Review',
             ...data
           };
         }) as UnifiedSubmission[];
